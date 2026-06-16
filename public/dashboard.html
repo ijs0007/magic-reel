@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" id="themeColorMeta" content="#faf9f5">
+<title>Magic Reel &mdash; Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf9f5; --surface:#ffffff; --text:#1a1a18; --text-soft:#6b6a64;
+    --border:rgba(0,0,0,0.10); --accent:#7c4dff; --accent-text:#fff; --field:#ffffff;
+    --good:#2e9e6b; --pick:#1a1a18; --pick-bg:#f3f1ea; --err:#b5402f;
+    --t1:#9a78ff; --t2:#7c4dff; --t3:#c77dff;
+  }
+  body.dark{
+    --bg:#1a1a1c; --surface:#252528; --text:#ececec; --text-soft:#9a9a9e;
+    --border:rgba(255,255,255,0.14); --accent:#7c4dff; --accent-text:#fff; --field:#2e2e32;
+    --good:#43c48a; --pick:#e8e8e8; --pick-bg:#34343a; --err:#e0796a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:40px}
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:18px 0 11px;margin-bottom:18px;border-bottom:1px solid var(--border)}
+  .brand{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:700;font-family:'Poppins','Segoe UI',-apple-system,sans-serif;letter-spacing:-.01em}
+  .brand .star{font-size:20px;color:var(--t2)}
+  .brand .wm{background:linear-gradient(92deg,var(--t1),var(--t2) 55%,var(--t3));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .header-right{display:flex;align-items:center;gap:10px}
+  .theme-toggle{font-size:16px;line-height:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text)}
+  .theme-toggle:hover{background:var(--pick-bg)}
+  .newbtn{border:1px solid var(--border);background:transparent;border-radius:9px;padding:7px 13px;font-family:inherit;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:border-color .15s,color .15s}
+  .newbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .newbtn svg{width:15px;height:15px}
+
+  h1.title{font-size:22px;font-weight:600;margin:2px 0 5px}
+  p.sub{color:var(--text-soft);font-size:14.5px;margin:0 0 20px}
+
+  /* poster tile */
+  .poster{border-radius:10px;flex:0 0 auto;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.92)}
+  .poster svg{width:24px;height:24px;opacity:.92}
+  .poster .dur{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.5);color:#fff;font-size:9px;font-weight:500;padding:1px 5px;border-radius:5px}
+
+  /* film row (list) */
+  .film{display:flex;gap:14px;align-items:center;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;margin-bottom:12px;transition:border-color .15s;-webkit-tap-highlight-color:transparent}
+  .film:hover{border-color:var(--text-soft)}
+  .film .poster{width:62px;height:62px}
+  .film .fmeta{flex:1 1 auto;min-width:0}
+  .film .ft{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .film .fs{font-size:12px;color:var(--text-soft);margin:2px 0 9px}
+  .film .frow2{display:flex;align-items:center;gap:10px}
+  .film .pct{font-size:11.5px;color:var(--text-soft);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .film .chev{flex:0 0 auto;color:var(--text-soft);opacity:.55;display:flex}
+  .film .chev svg{width:19px;height:19px}
+
+  .prog{height:6px;border-radius:5px;background:var(--pick-bg);overflow:hidden;flex:1 1 auto;min-width:40px}
+  .prog .pf{height:100%;background:var(--good);border-radius:5px;transition:width .3s}
+
+  /* detail */
+  .back{display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:var(--text-soft);font-family:inherit;font-size:13.5px;font-weight:500;cursor:pointer;padding:0;margin:0 0 16px}
+  .back:hover{color:var(--text)}
+  .back svg{width:17px;height:17px}
+  .dhead{display:flex;gap:15px;align-items:center}
+  .dhead .poster{width:74px;height:74px}
+  .dhead .dt{font-size:19px;font-weight:600;line-height:1.2}
+  .dhead .ds{font-size:12.5px;color:var(--text-soft);margin-top:3px}
+  .dsum{margin:18px 0 4px}
+  .dsum .head{font-size:13.5px;font-weight:500;margin-bottom:10px}
+  .dsum .head b{font-weight:700}
+  .statline{display:flex;gap:8px;margin-bottom:11px;flex-wrap:wrap}
+  .stat{font-size:11px;font-weight:600;padding:2px 10px;border-radius:999px;border:1px solid var(--border);color:var(--text-soft)}
+  .stat.open{background:color-mix(in srgb,var(--accent) 13%,transparent);border-color:color-mix(in srgb,var(--accent) 32%,transparent);color:var(--accent)}
+  .stat.done{background:color-mix(in srgb,var(--good) 15%,transparent);border-color:color-mix(in srgb,var(--good) 36%,transparent);color:var(--good)}
+  .seclbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);opacity:.72;margin:22px 0 10px}
+
+  .rrow{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--border);border-radius:11px;background:var(--surface);cursor:pointer;margin-bottom:8px;transition:border-color .15s;-webkit-tap-highlight-color:transparent}
+  .rrow:hover{border-color:var(--text-soft)}
+  .ava{width:38px;height:38px;border-radius:50%;flex:0 0 auto;color:#fff;font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .rmeta{flex:1 1 auto;min-width:0}
+  .rmeta .rn{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rmeta .rd{font-size:11.5px;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;font-variant-numeric:tabular-nums}
+
+  /* sheet */
+  .scrim{position:fixed;inset:0;z-index:60;background:rgba(20,20,22,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:22px}
+  .scrim.show{display:flex}
+  .sheet{width:100%;max-width:440px;max-height:90vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.28);animation:pop .26s cubic-bezier(.2,.9,.3,1.2)}
+  @keyframes pop{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:none}}
+  .sheet-top{padding:22px 22px 17px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border)}
+  .sheet-top .ava{width:50px;height:50px;font-size:17px}
+  .sheet-top .who{flex:1 1 auto;min-width:0}
+  .sheet-top .who h4{margin:0;font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .sheet-top .who span{font-size:12.5px;color:var(--text-soft)}
+  .sheet-body{padding:14px 22px 20px}
+  .fsec{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);opacity:.72;margin:16px 0 8px}
+  .fsec:first-child{margin-top:2px}
+
+  .journey .jstep{display:flex;align-items:center;gap:11px;padding:6px 0}
+  .jstep .jdot{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+  .jstep.done .jdot{background:var(--good);border-color:var(--good)}
+  .jstep .jdot svg{width:12px;height:12px;color:#fff;opacity:0}
+  .jstep.done .jdot svg{opacity:1}
+  .jstep .jlabel{flex:1 1 auto;font-size:13.5px;font-weight:500;color:var(--text-soft)}
+  .jstep.done .jlabel{color:var(--text)}
+  .jstep .jtime{font-size:11.5px;color:var(--text-soft);font-variant-numeric:tabular-nums}
+
+  .meter{height:9px;border-radius:6px;background:var(--pick-bg);overflow:hidden;margin:8px 0 4px}
+  .meter .fill{height:100%;background:linear-gradient(90deg,var(--t1),var(--t2));border-radius:6px}
+  .usedline{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px}
+  .usedline .u{font-weight:600;font-variant-numeric:tabular-nums}
+  .usedline .c{color:var(--text-soft);font-variant-numeric:tabular-nums}
+  .mtl{position:relative;height:26px;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:10px 0 6px}
+  .mseg{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 30%,transparent);border-left:2px solid var(--accent);border-right:2px solid var(--accent)}
+  .cliprow{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-top:1px solid var(--border)}
+  .cliprow:first-child{border-top:none}
+  .cliprow .ci{color:var(--text-soft);font-variant-numeric:tabular-nums}
+  .cliprow .cl{font-weight:500;font-variant-numeric:tabular-nums}
+  .muted{font-size:12.5px;color:var(--text-soft);margin:0}
+
+  .caprow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
+  .caprow .ct{font-size:13px}
+  .caprow .ct small{display:block;font-size:11px;color:var(--text-soft);margin-top:1px}
+  select.msm{font-family:inherit;font-size:14px;padding:8px 30px 8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-webkit-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6a64' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+  select.msm:focus{outline:none;border-color:var(--accent)}
+  .actrow{display:flex;gap:9px;margin-top:10px}
+  .btn-sec{flex:1;border:1px solid var(--border);background:transparent;border-radius:10px;padding:12px;font-family:inherit;font-size:13.5px;font-weight:500;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:border-color .15s,color .15s}
+  .btn-sec:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  .btn-sec:disabled{opacity:.55;cursor:default}
+  .btn-sec svg{width:16px;height:16px}
+  .sheet-close{margin:2px 22px 20px;width:calc(100% - 44px);border:1px solid var(--border);background:transparent;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;color:var(--text);padding:11px;transition:background .15s}
+  .sheet-close:hover{background:var(--bg)}
+
+  footer.ver{text-align:center;color:var(--text-soft);opacity:.7;font-size:11px;padding:28px 0 6px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--bg);font-size:13px;font-weight:500;padding:11px 18px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:all .25s;z-index:80;max-width:88vw;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .hidden{display:none !important}
+  @media (max-width:540px){.wrap{padding:0 16px} .newbtn{padding:7px 10px}}
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.001s !important;transition-duration:.001s !important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="star">&#10022;</span><span class="wm">Magic Reel</span></div>
+    <div class="header-right">
+      <button class="newbtn" id="newBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New send</button>
+      <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">&#127769;</button>
+    </div>
+  </header>
+
+  <div id="listView">
+    <h1 class="title">Your sends</h1>
+    <p class="sub">Films you&rsquo;ve shared &mdash; and where everyone&rsquo;s at.</p>
+    <div id="filmList"></div>
+  </div>
+
+  <div id="detailView" class="hidden"></div>
+
+  <footer class="ver">Magic Reel &middot; v0.5 &mdash; &#128202; Activity: who&rsquo;s opened, taken, and downloaded</footer>
+</div>
+
+<div class="scrim" id="sheetScrim"><div class="sheet" id="recSheet"></div></div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  function fmt(s){s=Math.max(0,Math.round(s));var m=Math.floor(s/60),ss=s%60;return m+":"+(ss<10?"0":"")+ss;}
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function ago(h){if(h==null)return'';if(h<1)return Math.max(1,Math.round(h*60))+'m ago';if(h<24)return Math.round(h)+'h ago';var d=Math.round(h/24);if(d<7)return d+'d ago';return Math.round(d/7)+'w ago';}
+
+  $('themeBtn').addEventListener('click',function(){var d=document.body.classList.toggle('dark');$('themeBtn').innerHTML=d?'&#9728;&#65039;':'&#127769;';$('themeColorMeta').setAttribute('content',d?'#1a1a1c':'#faf9f5');});
+
+  var AVA=['#7c4dff','#e0667b','#36b1a1','#c98a3a','#5b8def','#3aa6d6','#d06fa8','#6aa84f'];
+  function avaColor(id){var s=0;for(var i=0;i<id.length;i++)s+=id.charCodeAt(i);return AVA[s%AVA.length];}
+  function initials(n){return n.split(' ').filter(Boolean).slice(0,2).map(function(w){return w[0];}).join('').toUpperCase();}
+
+  var FILM_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.5"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg>';
+
+  /* ---- mock sends ---- */
+  var SENDS=[
+    {id:'s1',title:'The Lighthouse Keeper',dur:872,sent:72,grad:['#1f3a5f','#5b6cff'],
+      recipients:[
+        {pid:'vance',name:'Eleanor Vance',role:'Mara',cap:120,opened:50,downloaded:48,clips:[[34,71],[210,243],[612,642]]},
+        {pid:'brooks',name:'Theodore Brooks',role:'The Keeper',cap:120,opened:30,downloaded:26,clips:[[120,165],[700,742]]},
+        {pid:'adeyemi',name:'Junior Adeyemi',role:'Young Sailor',cap:120,opened:6,downloaded:null,clips:[[300,322]]},
+        {pid:'okonkwo',name:'Maya Okonkwo',role:'Director of Photography',cap:180,opened:54,downloaded:50,clips:[[40,86],[250,296],[500,546],[760,798]]},
+        {pid:'rivera',name:'Sam Rivera',role:'Sound Recordist',cap:120,opened:20,downloaded:null,clips:[]},
+        {pid:'nair',name:'Priya Nair',role:'Gaffer',cap:120,opened:null,downloaded:null,clips:[]},
+        {pid:'cho',name:'Daniel Cho',role:'1st AC',cap:120,opened:null,downloaded:null,clips:[]},
+        {pid:'bello_g',name:'Grace Bello',role:'Production Designer',cap:120,opened:7,downloaded:5,clips:[[88,118],[640,685]]}
+      ]},
+    {id:'s2',title:"Tuesday's Gone",dur:588,sent:28,grad:['#6b3f2a','#c98a3a'],
+      recipients:[
+        {pid:'hale',name:'Marcus Hale',role:'The Driver',cap:120,opened:7,downloaded:5,clips:[[60,105],[400,440],[520,548]]},
+        {pid:'rivera',name:'Sam Rivera',role:'Sound Recordist',cap:120,opened:4,downloaded:2,clips:[[200,233],[450,470]]},
+        {pid:'vance',name:'Eleanor Vance',role:'Diner Waitress',cap:120,opened:3,downloaded:null,clips:[[20,52],[300,322]]},
+        {pid:'okonkwo',name:'Maya Okonkwo',role:'Director of Photography',cap:150,opened:10,downloaded:null,clips:[[100,140]]},
+        {pid:'stein',name:'Leah Stein',role:'Editor',cap:120,opened:null,downloaded:null,clips:[]}
+      ]},
+    {id:'s3',title:'The Inheritance',dur:1330,sent:384,grad:['#3a2b4a','#9c5b8e'],
+      recipients:[
+        {pid:'bello_a',name:'Aisha Bello',role:'Nadia',cap:120,opened:340,downloaded:336,clips:[[50,92],[600,640],[900,930]]},
+        {pid:'brooks',name:'Theodore Brooks',role:'The Father',cap:120,opened:362,downloaded:360,clips:[[200,245],[800,842]]},
+        {pid:'liu',name:'Wenjie Liu',role:'The Brother',cap:120,opened:316,downloaded:312,clips:[[120,160],[700,745]]},
+        {pid:'marchetti',name:'Sofia Marchetti',role:'The Lawyer',cap:120,opened:340,downloaded:336,clips:[[30,60],[300,330],[600,628],[1000,1028]]}
+      ]}
+  ];
+
+  function statusOf(r){if(r.downloaded!=null)return'done';if(r.opened!=null||r.clips.length)return'open';return'sent';}
+  function usedOf(r){return r.clips.reduce(function(a,c){return a+(c[1]-c[0]);},0);}
+  function tally(send){var t={done:0,open:0,sent:0,total:send.recipients.length};send.recipients.forEach(function(r){t[statusOf(r)]++;});return t;}
+
+  function posterHTML(send,withDur){
+    return '<div class="poster" style="background:linear-gradient(135deg,'+send.grad[0]+','+send.grad[1]+')">'+FILM_SVG+(withDur?'<span class="dur">'+fmt(send.dur)+'</span>':'')+'</div>';
+  }
+
+  /* ---- list view ---- */
+  function renderList(){
+    var c=$('filmList');c.innerHTML='';
+    SENDS.forEach(function(send){
+      var t=tally(send),pct=Math.round(t.done/t.total*100);
+      var row=document.createElement('div');row.className='film';
+      row.innerHTML=posterHTML(send,true)+
+        '<div class="fmeta">'+
+          '<div class="ft">'+esc(send.title)+'</div>'+
+          '<div class="fs">'+t.total+' '+(t.total===1?'person':'people')+' &middot; sent '+ago(send.sent)+'</div>'+
+          '<div class="frow2"><div class="prog"><div class="pf" style="width:'+pct+'%"></div></div><div class="pct">'+t.done+'/'+t.total+' downloaded</div></div>'+
+        '</div>'+
+        '<div class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>';
+      row.addEventListener('click',function(){openDetail(send.id);});
+      c.appendChild(row);
+    });
+  }
+
+  /* ---- detail view ---- */
+  function rowDetail(r){
+    var st=statusOf(r);
+    if(st==='done')return r.clips.length+' clip'+(r.clips.length!==1?'s':'')+' \u00b7 '+fmt(usedOf(r))+' of '+fmt(r.cap)+' \u00b7 '+ago(r.downloaded);
+    if(st==='open')return r.clips.length?('Opened '+ago(r.opened)+' \u00b7 '+r.clips.length+' clip'+(r.clips.length!==1?'s':'')+' so far'):('Opened '+ago(r.opened)+' \u00b7 no clips yet');
+    return 'Sent '+ago(r.sentRef)+' \u00b7 not opened yet';
+  }
+  function openDetail(sendId){
+    var send=SENDS.filter(function(s){return s.id===sendId;})[0];if(!send)return;
+    send.recipients.forEach(function(r){r.sentRef=send.sent;});
+    var t=tally(send),pct=Math.round(t.done/t.total*100);
+    var statline='<div class="statline">';
+    statline+='<span class="stat done">'+t.done+' downloaded</span>';
+    if(t.open)statline+='<span class="stat open">'+t.open+' in progress</span>';
+    if(t.sent)statline+='<span class="stat">'+t.sent+' not opened</span>';
+    statline+='</div>';
+    var rows='';
+    send.recipients.forEach(function(r,i){
+      var st=statusOf(r),chip=st==='done'?'<span class="stat done">Downloaded</span>':(st==='open'?'<span class="stat open">In progress</span>':'<span class="stat">Sent</span>');
+      rows+='<div class="rrow" data-i="'+i+'"><div class="ava" style="background:'+avaColor(r.pid)+'">'+initials(r.name)+'</div><div class="rmeta"><div class="rn">'+esc(r.name)+'</div><div class="rd">'+rowDetail(r)+'</div></div>'+chip+'</div>';
+    });
+    $('detailView').innerHTML=
+      '<button class="back" id="backBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>All sends</button>'+
+      '<div class="dhead">'+posterHTML(send,true)+'<div><div class="dt">'+esc(send.title)+'</div><div class="ds">Sent '+ago(send.sent)+' &middot; '+fmt(send.dur)+' master</div></div></div>'+
+      '<div class="dsum"><div class="head"><b>'+t.done+' of '+t.total+'</b> have downloaded their reels.</div>'+statline+
+        '<div class="prog"><div class="pf" style="width:'+pct+'%"></div></div></div>'+
+      '<div class="seclbl">Recipients</div>'+rows;
+    $('backBtn').addEventListener('click',showList);
+    Array.prototype.forEach.call($('detailView').querySelectorAll('.rrow'),function(el){el.addEventListener('click',function(){openRecipient(send,parseInt(el.dataset.i,10));});});
+    $('listView').classList.add('hidden');$('detailView').classList.remove('hidden');window.scrollTo(0,0);
+  }
+  function showList(){$('detailView').classList.add('hidden');$('listView').classList.remove('hidden');window.scrollTo(0,0);}
+
+  /* ---- recipient sheet ---- */
+  var sheetScrim=$('sheetScrim'),recSheet=$('recSheet');
+  var CAP_OPTS=[30,60,90,120,150,180,240,300];
+  function openRecipient(send,i){
+    var r=send.recipients[i],st=statusOf(r),used=usedOf(r);
+    var chip=st==='done'?'<span class="stat done">Downloaded</span>':(st==='open'?'<span class="stat open">In progress</span>':'<span class="stat">Sent</span>');
+    var jOpen=r.opened!=null,jDown=r.downloaded!=null;
+    var journey='<div class="journey">'+
+      jstep(true,'Link sent',ago(send.sent))+
+      jstep(jOpen,'Opened the link',jOpen?ago(r.opened):'Not yet')+
+      jstep(jDown,'Downloaded reel',jDown?ago(r.downloaded):(jOpen?'In progress':'\u2014'))+
+      '</div>';
+    var reel;
+    if(r.clips.length){
+      var segs='';r.clips.forEach(function(c){segs+='<div class="mseg" style="left:'+(c[0]/send.dur*100)+'%;width:'+((c[1]-c[0])/send.dur*100)+'%"></div>';});
+      var rowsC='';r.clips.forEach(function(c,k){rowsC+='<div class="cliprow"><span class="ci">Clip '+(k+1)+' &middot; '+fmt(c[0])+' \u2192 '+fmt(c[1])+'</span><span class="cl">'+fmt(c[1]-c[0])+'</span></div>';});
+      reel='<div class="usedline"><span class="u">'+fmt(used)+' used</span><span class="c">of '+fmt(r.cap)+'</span></div>'+
+           '<div class="meter"><div class="fill" style="width:'+Math.min(100,used/r.cap*100)+'%"></div></div>'+
+           '<div class="mtl">'+segs+'</div>'+rowsC;
+    } else {
+      reel='<p class="muted">'+(jOpen?'Opened the link but hasn&rsquo;t picked any clips yet.':'Hasn&rsquo;t opened the link yet.')+'</p>';
+    }
+    var capSel='<select class="msm" id="capSel">'+CAP_OPTS.map(function(s){return '<option value="'+s+'"'+(r.cap===s?' selected':'')+'>'+fmt(s)+'</option>';}).join('')+'</select>';
+    var resendLabel=jDown?'Resend link':'Send a reminder';
+    recSheet.innerHTML=
+      '<div class="sheet-top"><div class="ava" style="background:'+avaColor(r.pid)+'">'+initials(r.name)+'</div><div class="who"><h4>'+esc(r.name)+' '+chip+'</h4><span>'+esc(r.role)+'</span></div></div>'+
+      '<div class="sheet-body">'+
+        '<div class="fsec">Progress</div>'+journey+
+        '<div class="fsec">Their reel'+(r.clips.length?' so far':'')+'</div>'+reel+
+        '<div class="fsec">Reel length</div>'+
+        '<div class="caprow"><div class="ct">Download cap<small>How much '+esc(r.name.split(' ')[0])+' can pull</small></div>'+capSel+'</div>'+
+        '<div class="actrow"><button class="btn-sec" id="resendBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>'+resendLabel+'</button>'+
+        '<button class="btn-sec" id="copyBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy link</button></div>'+
+      '</div>'+
+      '<button class="sheet-close" id="closeSheet">Close</button>';
+    sheetScrim.classList.add('show');
+    $('capSel').addEventListener('change',function(){r.cap=parseInt($('capSel').value,10);openRecipient(send,i);refreshDetailRow(send,i);});
+    $('resendBtn').addEventListener('click',function(){this.disabled=true;this.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'+(jDown?'Link resent':'Reminder sent');toast((jDown?'Link resent to ':'Reminder sent to ')+r.name.split(' ')[0]);});
+    $('copyBtn').addEventListener('click',function(){toast('Private link copied');});
+    $('closeSheet').addEventListener('click',function(){sheetScrim.classList.remove('show');});
+  }
+  function jstep(done,label,time){return '<div class="jstep'+(done?' done':'')+'"><span class="jdot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="jlabel">'+label+'</span><span class="jtime">'+time+'</span></div>';}
+  function refreshDetailRow(send,i){
+    var el=$('detailView').querySelector('.rrow[data-i="'+i+'"] .rd');
+    if(el)el.textContent=rowDetail(send.recipients[i]);
+  }
+  sheetScrim.addEventListener('click',function(e){if(e.target===sheetScrim)sheetScrim.classList.remove('show');});
+
+  /* toast + new-send hint */
+  var toastEl,toastTimer;
+  function toast(msg){if(!toastEl){toastEl=document.createElement('div');toastEl.className='toast';document.body.appendChild(toastEl);}toastEl.textContent=msg;toastEl.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(function(){toastEl.classList.remove('show');},2200);}
+  $('newBtn').addEventListener('click',function(){toast('This would open the Send screen.');});
+
+  renderList();
+})();
+</script>
+</body>
+</html>

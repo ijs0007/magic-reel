@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" id="themeColorMeta" content="#faf9f5">
+<title>Magic Reel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf9f5; --surface:#ffffff; --text:#1a1a18; --text-soft:#6b6a64;
+    --border:rgba(0,0,0,0.10); --accent:#7c4dff; --accent-text:#fff; --field:#ffffff;
+    --good:#2e9e6b; --pick:#1a1a18; --pick-bg:#f3f1ea; --err:#b5402f;
+    --t1:#9a78ff; --t2:#7c4dff; --t3:#c77dff;
+  }
+  body.dark{
+    --bg:#1a1a1c; --surface:#252528; --text:#ececec; --text-soft:#9a9a9e;
+    --border:rgba(255,255,255,0.14); --accent:#7c4dff; --accent-text:#fff; --field:#2e2e32;
+    --good:#43c48a; --pick:#e8e8e8; --pick-bg:#34343a; --err:#e0796a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:124px}
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:18px 0 11px;margin-bottom:18px;border-bottom:1px solid var(--border)}
+  .brand{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:700;font-family:'Poppins','Segoe UI',-apple-system,sans-serif;letter-spacing:-.01em}
+  .brand .star{font-size:20px;color:var(--t2)}
+  .brand .wm{background:linear-gradient(92deg,var(--t1),var(--t2) 55%,var(--t3));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .theme-toggle{font-size:16px;line-height:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text)}
+  .theme-toggle:hover{background:var(--pick-bg)}
+
+  h1.title{font-size:22px;font-weight:600;margin:2px 0 5px}
+  p.sub{color:var(--text-soft);font-size:14.5px;margin:0 0 20px}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);opacity:.72;margin:0 0 13px}
+
+  /* drop zone */
+  .drop{border:2px dashed var(--border);border-radius:12px;background:var(--bg);padding:32px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+  .drop:hover{border-color:var(--text-soft)}
+  .drop.drag{border-color:var(--accent);background:var(--pick-bg)}
+  .drop-ico{width:48px;height:48px;border-radius:12px;margin:0 auto 12px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--accent)}
+  .drop-ico svg{width:23px;height:23px}
+  .drop h2{font-size:15px;font-weight:500;margin:0 0 3px;color:var(--text)}
+  .drop p{font-size:12.5px;color:var(--text-soft);margin:0}
+  .drop .browse{color:var(--accent);font-weight:500}
+
+  .filecard{display:none;align-items:center;gap:14px;padding:13px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+  .filecard.show{display:flex}
+  .thumb{width:78px;height:46px;border-radius:7px;flex:0 0 auto;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;position:relative}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb .ph svg{width:20px;height:20px;opacity:.7}
+  .badge{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.66);color:#fff;font-size:9px;font-weight:500;padding:1px 5px;border-radius:5px}
+  .fileinfo{flex:1 1 auto;min-width:0}
+  .fileinfo .name{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fileinfo .meta{font-size:11.5px;color:var(--text-soft);margin-top:2px}
+  .xbtn{flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text-soft);display:flex;align-items:center;justify-content:center;transition:border-color .15s,color .15s}
+  .xbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .xbtn svg{width:15px;height:15px}
+
+  /* default-length control */
+  .deflen{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .deflen .dl-label{font-size:13px;color:var(--text)}
+  .deflen .dl-label small{display:block;font-size:11.5px;color:var(--text-soft);margin-top:1px}
+  select.msm{font-family:inherit;font-size:14px;padding:8px 30px 8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-webkit-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6a64' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+  select.msm:focus{outline:none;border-color:var(--accent)}
+  .deflen select.msm{min-width:120px}
+
+  /* add-recipients sources */
+  .addlbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);opacity:.72;margin:18px 0 9px}
+  .seg{display:flex;gap:7px;margin-bottom:6px}
+  .seg button{flex:1;font-family:inherit;font-size:13px;font-weight:500;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-soft);cursor:pointer;transition:all .15s;white-space:nowrap}
+  .seg button:hover{border-color:var(--accent);color:var(--accent)}
+  .seg button.on{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+  .seg button.on:hover{color:var(--accent-text)}
+
+  .projsel-wrap{margin-top:14px}
+  select.proj{width:100%;font-family:inherit;font-size:14.5px;padding:11px 36px 11px 13px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-webkit-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%236b6a64' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+  select.proj:focus{outline:none;border-color:var(--accent)}
+  #projPick{margin-top:2px}
+
+  .search{width:100%;font-family:inherit;font-size:14px;padding:10px 13px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);margin-top:14px}
+  .search::placeholder{color:var(--text-soft);opacity:.7}
+  .search:focus{outline:none;border-color:var(--accent)}
+  #rosterList{margin-top:12px;max-height:344px;overflow:auto}
+
+  .empty{text-align:center;color:var(--text-soft);font-size:13px;padding:26px 18px;border:1px dashed var(--border);border-radius:11px;margin-top:14px;background:var(--bg)}
+  .empty svg{width:25px;height:25px;color:var(--text-soft);opacity:.6;margin-bottom:8px}
+
+  .group{margin-top:16px}
+  .group-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+  .group-head .lbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);opacity:.72;display:flex;align-items:center;gap:8px}
+  .group-head .lbl .ct{border:1px solid var(--border);border-radius:999px;padding:1px 8px;font-size:10px;letter-spacing:0;opacity:1}
+  .group-head .acts{display:flex;gap:13px}
+  .linkbtn{border:none;background:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;color:var(--accent);padding:0}
+  .linkbtn:hover{opacity:.75}
+
+  .person{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:11px;background:var(--surface);cursor:pointer;margin-bottom:8px;transition:border-color .15s,background .15s;-webkit-tap-highlight-color:transparent}
+  .person:hover{border-color:var(--text-soft)}
+  .person.sel{border-color:var(--pick);background:var(--pick-bg)}
+  .ava{width:37px;height:37px;border-radius:50%;flex:0 0 auto;color:#fff;font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .pmeta{flex:1 1 auto;min-width:0}
+  .pmeta .pn{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pmeta .pr{font-size:12px;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+  .cappill{flex:0 0 auto;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--text-soft);font-variant-numeric:tabular-nums}
+  .cappill.custom{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+  .info{flex:0 0 auto;width:28px;height:28px;border-radius:50%;border:none;background:transparent;cursor:pointer;color:var(--text-soft);opacity:.7;display:flex;align-items:center;justify-content:center;transition:background .15s,opacity .15s}
+  .info:hover{background:var(--bg);opacity:1}
+  .info svg{width:18px;height:18px}
+  .check{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;transition:all .15s;background:var(--surface)}
+  .person.sel .check{background:var(--accent);border-color:var(--accent)}
+  .check svg{width:13px;height:13px;color:#fff;opacity:0;transform:scale(.5);transition:all .15s}
+  .person.sel .check svg{opacity:1;transform:scale(1)}
+
+  /* recipient list */
+  .reclist-wrap{border-top:1px solid var(--border);margin-top:18px;padding-top:15px}
+  .reclist-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+  .reclist-head .lbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);opacity:.72;display:flex;align-items:center;gap:8px}
+  .reclist-head .lbl .ct{border:1px solid var(--border);border-radius:999px;padding:1px 8px;font-size:10px;letter-spacing:0;opacity:1}
+  .recrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:11px;background:var(--surface);margin-bottom:8px}
+  .recrow .xbtn{width:28px;height:28px}
+
+  .crow{display:flex;gap:9px;margin:14px 0 9px;align-items:center}
+  .crow input{flex:1;min-width:0;font-family:inherit;font-size:13.5px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text)}
+  .crow input::placeholder{color:var(--text-soft);opacity:.7}
+  .crow input:focus{outline:none;border-color:var(--accent)}
+  .crow input.bad{border-color:var(--err)}
+  .crow .nm{flex:0 0 38%}
+  .addbtn{width:100%;border:1px dashed var(--border);background:var(--bg);border-radius:9px;padding:11px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;color:var(--accent);display:flex;align-items:center;justify-content:center;gap:7px;transition:border-color .15s}
+  .addbtn:hover{border-color:var(--accent)}
+  .addbtn svg{width:16px;height:16px}
+  .custom-hint{font-size:12.5px;color:var(--text-soft);margin:14px 0 0}
+
+  .bar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:saturate(180%) blur(18px);-webkit-backdrop-filter:saturate(180%) blur(18px);border-top:1px solid var(--border);padding:13px 22px calc(13px + env(safe-area-inset-bottom))}
+  .bar-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:14px}
+  .bar .count{flex:1 1 auto;min-width:0}
+  .bar .count .big{font-size:14px;font-weight:600}
+  .bar .count .sub2{font-size:11.5px;color:var(--text-soft);margin-top:1px}
+  .send{flex:0 0 auto;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:15px;font-weight:600;color:var(--accent-text);background:var(--accent);padding:12px 24px;display:flex;align-items:center;gap:8px;transition:opacity .15s}
+  .send:hover:not(:disabled){opacity:.9}
+  .send:disabled{opacity:.4;cursor:default}
+  .send svg{width:17px;height:17px}
+
+  footer.ver{text-align:center;color:var(--text-soft);opacity:.7;font-size:11px;padding:22px 0 6px}
+
+  .scrim{position:fixed;inset:0;z-index:60;background:rgba(20,20,22,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:22px}
+  .scrim.show{display:flex}
+  .modal{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.28);padding:28px 24px;text-align:center;animation:pop .28s cubic-bezier(.2,.9,.3,1.2)}
+  @keyframes pop{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:none}}
+  .pipe{text-align:left;margin:20px 0 4px}
+  .pl{display:flex;align-items:center;gap:12px;padding:9px 0;color:var(--text-soft);font-size:13.5px;font-weight:500;transition:color .3s}
+  .pl .dot{width:24px;height:24px;border-radius:50%;border:2px solid var(--border);flex:0 0 auto;display:flex;align-items:center;justify-content:center;transition:all .3s}
+  .pl .dot svg{width:13px;height:13px;color:#fff;opacity:0;transition:opacity .2s}
+  .pl.active{color:var(--text)} .pl.active .dot{border-color:var(--accent)}
+  .pl.done{color:var(--text)} .pl.done .dot{background:var(--good);border-color:var(--good)} .pl.done .dot svg{opacity:1}
+  .spin{width:13px;height:13px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .modal h3{font-size:18px;font-weight:600;margin:14px 0 5px}
+  .modal .lede{font-size:13.5px;color:var(--text-soft);margin:0;line-height:1.5}
+  .okring{width:54px;height:54px;border-radius:50%;background:var(--good);margin:0 auto 4px;display:flex;align-items:center;justify-content:center;animation:pop .32s cubic-bezier(.2,.9,.3,1.2)}
+  .okring svg{width:29px;height:29px;color:#fff}
+  .sentlist{text-align:left;margin:18px 0 4px;max-height:190px;overflow:auto}
+  .sentlist .sr{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border)}
+  .sentlist .sr:first-child{border-top:none}
+  .sentlist .sr .ava{width:28px;height:28px;font-size:11px}
+  .sentlist .sr .si{flex:1 1 auto;min-width:0}
+  .sentlist .sr .nm{font-weight:500;font-size:13px}
+  .sentlist .sr .em{color:var(--text-soft);font-size:11.5px}
+  .sentlist .sr .cp{font-size:10.5px;font-weight:600;color:var(--text-soft);border:1px solid var(--border);border-radius:999px;padding:1px 8px;font-variant-numeric:tabular-nums}
+  .modalbtn{margin-top:20px;width:100%;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:15px;font-weight:600;color:var(--accent-text);background:var(--accent);padding:13px;transition:opacity .15s}
+  .modalbtn:hover{opacity:.9}
+  .note2{font-size:11.5px;color:var(--text-soft);margin-top:13px}
+
+  .sheet{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.28);overflow:hidden;animation:pop .26s cubic-bezier(.2,.9,.3,1.2)}
+  .sheet-top{padding:24px 22px 18px;display:flex;align-items:center;gap:15px;border-bottom:1px solid var(--border)}
+  .sheet-top .ava{width:52px;height:52px;font-size:18px}
+  .sheet-top .who h4{margin:0;font-size:17px;font-weight:600}
+  .sheet-top .who span{font-size:12.5px;color:var(--text-soft)}
+  .sheet-body{padding:16px 22px 22px}
+  .frow{display:flex;align-items:center;gap:12px;padding:8px 0;font-size:13.5px}
+  .frow svg{width:17px;height:17px;color:var(--text-soft);flex:0 0 auto}
+  .fsec{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);opacity:.72;margin:15px 0 7px}
+  .caprow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
+  .caprow .ct{font-size:13px}
+  .caprow .ct small{display:block;font-size:11px;color:var(--text-soft);margin-top:1px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:500}
+  .sheet-close{margin:4px 22px 20px;width:calc(100% - 44px);border:1px solid var(--border);background:transparent;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;color:var(--text);padding:11px;transition:background .15s}
+  .sheet-close:hover{background:var(--bg)}
+
+  .hidden{display:none !important}
+  @media (max-width:540px){.wrap{padding:0 16px} .crow .nm{flex:0 0 42%} .send{padding:12px 18px;font-size:14.5px} .seg button{font-size:12px;padding:8px 5px}}
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.001s !important;transition-duration:.001s !important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="star">&#10022;</span><span class="wm">Magic Reel</span></div>
+    <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">&#127769;</button>
+  </header>
+
+  <h1 class="title">Send selects</h1>
+  <p class="sub">Drop your film, choose who&rsquo;s getting reels, and they build their own.</p>
+
+  <!-- STEP 1 -->
+  <div class="card">
+    <p class="eyebrow">Your film</p>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Add a video file">
+      <div class="drop-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v13M7 8l5-5 5 5"/></svg></div>
+      <h2>Drop your film here</h2>
+      <p>or <span class="browse">browse to choose</span> &mdash; any video file</p>
+    </div>
+    <input type="file" id="filein" accept="video/*" class="hidden">
+    <div class="filecard" id="filecard">
+      <div class="thumb" id="thumb"><span class="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="5 3 19 12 5 21 5 3"/></svg></span></div>
+      <div class="fileinfo"><div class="name" id="fname">&mdash;</div><div class="meta" id="fmeta">&mdash;</div></div>
+      <button class="xbtn" id="fremove" aria-label="Remove file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="card">
+    <p class="eyebrow">Who gets it</p>
+
+    <div class="deflen">
+      <div class="dl-label">Default reel length<small>How much each person can download</small></div>
+      <select class="msm" id="defLen"></select>
+    </div>
+
+    <p class="addlbl">Add recipients</p>
+    <div class="seg" id="seg">
+      <button data-src="project" class="on">Project</button>
+      <button data-src="database">My people</button>
+      <button data-src="custom">Someone new</button>
+    </div>
+
+    <div id="srcProject">
+      <div class="projsel-wrap">
+        <select class="proj" id="projsel"><option value="">Choose a project&hellip;</option></select>
+      </div>
+      <div id="projPick">
+        <div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><div>Pick a project to add its cast and crew.</div></div>
+      </div>
+    </div>
+
+    <div id="srcDatabase" class="hidden">
+      <input class="search" id="rosterSearch" type="text" placeholder="Search your people&hellip;" autocomplete="off">
+      <div id="rosterList"></div>
+    </div>
+
+    <div id="srcCustom" class="hidden">
+      <p class="custom-hint">For someone who isn&rsquo;t in your database &mdash; add them by name and email.</p>
+      <div class="crow">
+        <input class="nm" id="custName" type="text" placeholder="Name" autocomplete="off">
+        <input class="em" id="custEmail" type="email" placeholder="email@address.com" autocomplete="off">
+      </div>
+      <button class="addbtn" id="addCustomBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add to recipients</button>
+    </div>
+
+    <div class="reclist-wrap">
+      <div class="reclist-head">
+        <div class="lbl">Sending to <span class="ct" id="recCount">0</span></div>
+        <button class="linkbtn" id="clearAll" style="display:none">Clear all</button>
+      </div>
+      <div id="reclist"></div>
+    </div>
+  </div>
+
+  <footer class="ver">Magic Reel &middot; v0.4 &mdash; &#128101; One List: project, roster, or custom in one send</footer>
+</div>
+
+<div class="bar">
+  <div class="bar-in">
+    <div class="count">
+      <div class="big" id="countBig">No one selected yet</div>
+      <div class="sub2" id="countSub">Add a film and choose your people</div>
+    </div>
+    <button class="send" id="sendbtn" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>Send Reel</button>
+  </div>
+</div>
+
+<div class="scrim" id="processScrim"><div class="modal" id="processModal"></div></div>
+<div class="scrim" id="profileScrim"><div class="sheet" id="profileSheet"></div></div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  function fmt(s){s=Math.round(s);var m=Math.floor(s/60),ss=s%60;return m+":"+(ss<10?"0":"")+ss;}
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  /* theme toggle */
+  $('themeBtn').addEventListener('click',function(){
+    var d=document.body.classList.toggle('dark');
+    $('themeBtn').innerHTML=d?'&#9728;&#65039;':'&#127769;';
+    $('themeColorMeta').setAttribute('content',d?'#1a1a1c':'#faf9f5');
+  });
+
+  /* mock data */
+  var AVA=['#7c4dff','#e0667b','#36b1a1','#c98a3a','#5b8def','#3aa6d6','#d06fa8','#6aa84f'];
+  function avaColor(id){var s=0;for(var i=0;i<id.length;i++)s+=id.charCodeAt(i);return AVA[s%AVA.length];}
+  function initials(n){return n.split(' ').filter(Boolean).slice(0,2).map(function(w){return w[0];}).join('').toUpperCase();}
+  function emailFor(n){return n.toLowerCase().replace(/[^a-z ]/g,'').trim().replace(/\s+/g,'.')+'@email.com';}
+
+  var PEOPLE={
+    vance:{name:'Eleanor Vance',phone:'(310) 555-0142'}, brooks:{name:'Theodore Brooks',phone:'(323) 555-0119'},
+    adeyemi:{name:'Junior Adeyemi',phone:'(213) 555-0188'}, hale:{name:'Marcus Hale',phone:'(424) 555-0173'},
+    bello_a:{name:'Aisha Bello',phone:'(310) 555-0150'}, liu:{name:'Wenjie Liu',phone:'(323) 555-0166'},
+    marchetti:{name:'Sofia Marchetti',phone:'(213) 555-0102'}, okonkwo:{name:'Maya Okonkwo',phone:'(310) 555-0131'},
+    rivera:{name:'Sam Rivera',phone:'(424) 555-0145'}, nair:{name:'Priya Nair',phone:'(323) 555-0177'},
+    cho:{name:'Daniel Cho',phone:'(213) 555-0190'}, bello_g:{name:'Grace Bello',phone:'(310) 555-0124'},
+    stein:{name:'Leah Stein',phone:'(424) 555-0158'}, watanabe:{name:'Kenji Watanabe',phone:'(323) 555-0136'}
+  };
+  var PROJECTS=[
+    {id:'lighthouse',title:'The Lighthouse Keeper',meta:'14:32',
+      cast:[{p:'vance',role:'Mara'},{p:'brooks',role:'The Keeper'},{p:'adeyemi',role:'Young Sailor'}],
+      crew:[{p:'okonkwo',role:'Director of Photography'},{p:'rivera',role:'Sound Recordist'},{p:'nair',role:'Gaffer'},{p:'cho',role:'1st AC'},{p:'bello_g',role:'Production Designer'}]},
+    {id:'tuesday',title:"Tuesday's Gone",meta:'9:48',
+      cast:[{p:'vance',role:'Diner Waitress'},{p:'hale',role:'The Driver'}],
+      crew:[{p:'okonkwo',role:'Director of Photography'},{p:'stein',role:'Editor'},{p:'rivera',role:'Sound Recordist'}]},
+    {id:'inheritance',title:'The Inheritance',meta:'22:10',
+      cast:[{p:'bello_a',role:'Nadia'},{p:'brooks',role:'The Father'},{p:'liu',role:'The Brother'},{p:'marchetti',role:'The Lawyer'}],
+      crew:[{p:'watanabe',role:'Director of Photography'},{p:'nair',role:'Gaffer'},{p:'rivera',role:'Sound Recordist'}]}
+  ];
+  function projectsForPerson(pid){var o=[];PROJECTS.forEach(function(pr){if(pr.cast.concat(pr.crew).some(function(m){return m.p===pid;}))o.push(pr.title);});return o;}
+
+  /* ---- recipients model ---- */
+  var CAP_OPTS=[30,60,90,120,150,180,240,300];
+  var state={src:'project',projectId:'',recipients:[],file:null,globalCap:120};
+  var customSeq=0;
+  function effCap(rec){return rec.override!=null?rec.override:state.globalCap;}
+  function findByPid(pid){for(var i=0;i<state.recipients.length;i++){var r=state.recipients[i];if(r.kind==='person'&&r.pid===pid)return r;}return null;}
+  function idxById(id){for(var i=0;i<state.recipients.length;i++){if(state.recipients[i].id===id)return i;}return -1;}
+  function addPerson(pid,role){if(findByPid(pid))return;state.recipients.push({id:'p:'+pid,kind:'person',pid:pid,name:PEOPLE[pid].name,email:emailFor(PEOPLE[pid].name),role:role||'',override:null});}
+  function removeById(id){var i=idxById(id);if(i>=0)state.recipients.splice(i,1);}
+  function togglePerson(pid,role){var r=findByPid(pid);if(r)removeById(r.id);else addPerson(pid,role);}
+  function validEmail(e){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((e||'').trim());}
+
+  /* default-length select */
+  CAP_OPTS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=fmt(s);if(s===120)o.selected=true;$('defLen').appendChild(o);});
+  $('defLen').addEventListener('change',function(){state.globalCap=parseInt($('defLen').value,10);renderRecipientList();});
+
+  /* file */
+  function fmtSize(b){if(!b)return'';var u=['B','KB','MB','GB'];var i=Math.floor(Math.log(b)/Math.log(1024));return (b/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];}
+  function fmtDur(s){if(!isFinite(s)||!s)return'';s=Math.round(s);var m=Math.floor(s/60),ss=s%60;return m+':'+(ss<10?'0':'')+ss;}
+  var drop=$('drop'),filein=$('filein'),filecard=$('filecard'),thumb=$('thumb'),fname=$('fname'),fmeta=$('fmeta');
+  function handleFile(file){
+    if(!file)return;
+    state.file={name:file.name,size:file.size,duration:0};
+    fname.textContent=file.name; fmeta.textContent=fmtSize(file.size);
+    thumb.innerHTML='<span class="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>';
+    filecard.classList.add('show'); drop.style.display='none';
+    try{
+      var url=URL.createObjectURL(file),v=document.createElement('video');
+      v.preload='metadata';v.muted=true;v.src=url;
+      v.addEventListener('loadedmetadata',function(){state.file.duration=v.duration;var d=fmtDur(v.duration);fmeta.textContent=fmtSize(file.size)+(d?' \u00b7 '+d:'');try{v.currentTime=Math.min(1,v.duration/2);}catch(e){}});
+      v.addEventListener('seeked',function(){try{var c=document.createElement('canvas');c.width=160;c.height=90;c.getContext('2d').drawImage(v,0,0,160,90);thumb.innerHTML='<img alt="frame" src="'+c.toDataURL('image/jpeg',0.7)+'">';if(state.file.duration){var b=document.createElement('span');b.className='badge';b.textContent=fmtDur(state.file.duration);thumb.appendChild(b);}URL.revokeObjectURL(url);}catch(e){}});
+      v.addEventListener('error',function(){try{URL.revokeObjectURL(url);}catch(e){}});
+    }catch(e){}
+    refresh();
+  }
+  function clearFile(){state.file=null;filecard.classList.remove('show');drop.style.display='';filein.value='';refresh();}
+  drop.addEventListener('click',function(){filein.click();});
+  drop.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();filein.click();}});
+  filein.addEventListener('change',function(e){if(e.target.files&&e.target.files[0])handleFile(e.target.files[0]);});
+  $('fremove').addEventListener('click',clearFile);
+  ['dragenter','dragover'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.add('drag');});});
+  ['dragleave','drop'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.remove('drag');});});
+  drop.addEventListener('drop',function(e){var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)handleFile(f);});
+
+  /* ---- source switching ---- */
+  var seg=$('seg');
+  seg.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;state.src=b.dataset.src;
+    Array.prototype.forEach.call(seg.children,function(c){c.classList.toggle('on',c===b);});
+    $('srcProject').classList.toggle('hidden',state.src!=='project');
+    $('srcDatabase').classList.toggle('hidden',state.src!=='database');
+    $('srcCustom').classList.toggle('hidden',state.src!=='custom');
+    if(state.src==='project')renderProjPick();
+    else if(state.src==='database')renderRoster();
+  });
+
+  /* ---- shared picker row ---- */
+  var pickRowEls={};
+  function syncPick(pid){var el=pickRowEls[pid];if(el)el.classList.toggle('sel',!!findByPid(pid));}
+  function pickRow(pid,role,sub){
+    var row=document.createElement('div');row.className='person'+(findByPid(pid)?' sel':'');row.dataset.pid=pid;
+    row.innerHTML=
+      '<div class="ava" style="background:'+avaColor(pid)+'">'+initials(PEOPLE[pid].name)+'</div>'+
+      '<div class="pmeta"><div class="pn">'+esc(PEOPLE[pid].name)+'</div><div class="pr">'+esc(sub||'')+'</div></div>'+
+      '<div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>';
+    row.addEventListener('click',function(){togglePerson(pid,role);syncPick(pid);renderRecipientList();refresh();});
+    pickRowEls[pid]=row;
+    return row;
+  }
+  function emptyBlock(msg){return '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><div>'+msg+'</div></div>';}
+
+  /* ---- project source ---- */
+  var projsel=$('projsel'),projPick=$('projPick');
+  PROJECTS.forEach(function(pr){var o=document.createElement('option');o.value=pr.id;o.textContent=pr.title+'  \u00b7  '+pr.meta;projsel.appendChild(o);});
+  projsel.addEventListener('change',function(){state.projectId=projsel.value;renderProjPick();});
+  function groupBlock(label,members){
+    var wrap=document.createElement('div');wrap.className='group';
+    var head=document.createElement('div');head.className='group-head';
+    head.innerHTML='<div class="lbl">'+label+'<span class="ct">'+members.length+'</span></div>';
+    var acts=document.createElement('div');acts.className='acts';
+    var a=document.createElement('button');a.className='linkbtn';a.textContent='Add all';
+    var c=document.createElement('button');c.className='linkbtn';c.textContent='Remove all';
+    a.addEventListener('click',function(){members.forEach(function(m){addPerson(m.p,m.role);syncPick(m.p);});renderRecipientList();refresh();});
+    c.addEventListener('click',function(){members.forEach(function(m){var r=findByPid(m.p);if(r)removeById(r.id);syncPick(m.p);});renderRecipientList();refresh();});
+    acts.appendChild(a);acts.appendChild(c);head.appendChild(acts);wrap.appendChild(head);
+    members.forEach(function(m){wrap.appendChild(pickRow(m.p,m.role,m.role));});
+    return wrap;
+  }
+  function renderProjPick(){
+    pickRowEls={};projPick.innerHTML='';
+    var pr=PROJECTS.filter(function(x){return x.id===state.projectId;})[0];
+    if(!pr){projPick.innerHTML=emptyBlock('Pick a project to add its cast and crew.');return;}
+    projPick.appendChild(groupBlock('Cast',pr.cast));
+    projPick.appendChild(groupBlock('Crew',pr.crew));
+  }
+
+  /* ---- my-people (roster) source ---- */
+  function renderRoster(){
+    pickRowEls={};var list=$('rosterList');list.innerHTML='';
+    var q=($('rosterSearch').value||'').trim().toLowerCase();
+    var ids=Object.keys(PEOPLE).filter(function(pid){return !q||PEOPLE[pid].name.toLowerCase().indexOf(q)>=0;});
+    ids.sort(function(a,b){return PEOPLE[a].name.localeCompare(PEOPLE[b].name);});
+    if(!ids.length){list.innerHTML='<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><div>No people match &ldquo;'+esc(q)+'&rdquo;.</div></div>';return;}
+    ids.forEach(function(pid){var projs=projectsForPerson(pid);var sub=projs.length?projs.join(' \u00b7 '):'In your database';list.appendChild(pickRow(pid,'',sub));});
+  }
+  $('rosterSearch').addEventListener('input',renderRoster);
+
+  /* ---- someone-new (custom) source ---- */
+  var custName=$('custName'),custEmail=$('custEmail');
+  function addCustom(){
+    var n=custName.value.trim(),em=custEmail.value.trim(),ok=true;
+    if(!n){custName.classList.add('bad');ok=false;}
+    if(!validEmail(em)){custEmail.classList.add('bad');ok=false;}
+    if(!ok)return;
+    state.recipients.push({id:'c:'+(customSeq++),kind:'custom',name:n,email:em,role:'',override:null});
+    custName.value='';custEmail.value='';custName.classList.remove('bad');custEmail.classList.remove('bad');
+    renderRecipientList();refresh();custName.focus();
+  }
+  $('addCustomBtn').addEventListener('click',addCustom);
+  custName.addEventListener('input',function(){custName.classList.remove('bad');});
+  custEmail.addEventListener('input',function(){custEmail.classList.remove('bad');});
+  custEmail.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addCustom();}});
+
+  /* ---- recipient list (the send target) ---- */
+  function recSub(rec){
+    if(rec.kind==='custom')return rec.email;
+    if(rec.role)return rec.role;
+    var projs=projectsForPerson(rec.pid);return projs.length?projs.join(' \u00b7 '):'In your database';
+  }
+  function renderRecipientList(){
+    var list=$('reclist');list.innerHTML='';
+    $('recCount').textContent=state.recipients.length;
+    $('clearAll').style.display=state.recipients.length?'':'none';
+    if(!state.recipients.length){list.innerHTML='<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg><div>No recipients yet &mdash; add people above.</div></div>';return;}
+    state.recipients.forEach(function(rec){
+      var col=rec.kind==='person'?avaColor(rec.pid):avaColor(rec.id);
+      var ov=rec.override!=null;
+      var row=document.createElement('div');row.className='recrow';
+      row.innerHTML=
+        '<div class="ava" style="background:'+col+'">'+initials(rec.name)+'</div>'+
+        '<div class="pmeta"><div class="pn">'+esc(rec.name)+'</div><div class="pr">'+esc(recSub(rec))+'</div></div>'+
+        '<span class="cappill'+(ov?' custom':'')+'">'+fmt(effCap(rec))+'</span>'+
+        '<button class="info" aria-label="Set reel length"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></button>'+
+        '<button class="xbtn" aria-label="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>';
+      row.querySelector('.info').addEventListener('click',function(){openProfile(rec);});
+      row.querySelector('.xbtn').addEventListener('click',function(){var pid=rec.pid;removeById(rec.id);if(rec.kind==='person')syncPick(pid);renderRecipientList();refresh();});
+      list.appendChild(row);
+    });
+  }
+  $('clearAll').addEventListener('click',function(){var pids=state.recipients.filter(function(r){return r.kind==='person';}).map(function(r){return r.pid;});state.recipients=[];pids.forEach(syncPick);renderRecipientList();refresh();});
+
+  function refresh(){
+    var n=state.recipients.length,hasFile=!!state.file;
+    $('countBig').textContent=n===0?'No one selected yet':(n+' '+(n===1?'person':'people')+' selected');
+    if(!hasFile&&n===0)$('countSub').textContent='Add a film and choose your people';
+    else if(!hasFile)$('countSub').textContent='Add your film to send';
+    else if(n===0)$('countSub').textContent='Add who gets the reel';
+    else $('countSub').textContent='Ready to send';
+    $('sendbtn').disabled=!(hasFile&&n>0);
+  }
+
+  /* ---- profile + override ---- */
+  var profileScrim=$('profileScrim'),profileSheet=$('profileSheet');
+  function openProfile(rec){
+    var isP=rec.kind==='person';
+    var col=isP?avaColor(rec.pid):avaColor(rec.id);
+    var sub=isP?(rec.role||'In your database'):'Custom recipient';
+    var capSel='<select class="msm" id="capSel"><option value="">Match default ('+fmt(state.globalCap)+')</option>'+CAP_OPTS.map(function(s){return '<option value="'+s+'"'+(rec.override===s?' selected':'')+'>'+fmt(s)+'</option>';}).join('')+'</select>';
+    var body='<div class="frow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg><span>'+esc(rec.email)+'</span></div>';
+    if(isP)body+='<div class="frow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg><span>'+PEOPLE[rec.pid].phone+'</span></div>';
+    body+='<div class="fsec">Reel length for this person</div><div class="caprow"><div class="ct">Download cap<small>Overrides the default for '+esc(rec.name.split(' ')[0])+'</small></div>'+capSel+'</div>';
+    if(isP){var projs=projectsForPerson(rec.pid);body+='<div class="fsec">Worked on '+projs.length+' of your projects</div><div class="chips">'+projs.map(function(t){return '<span class="chip">'+esc(t)+'</span>';}).join('')+'</div>';}
+    else body+='<div class="fsec">Not in your database</div><p style="font-size:12.5px;color:var(--text-soft);margin:0">Typed in for this send only.</p>';
+    profileSheet.innerHTML='<div class="sheet-top"><div class="ava" style="background:'+col+'">'+initials(rec.name)+'</div><div class="who"><h4>'+esc(rec.name)+'</h4><span>'+esc(sub)+'</span></div></div><div class="sheet-body">'+body+'</div><button class="sheet-close" id="closeProfile">Close</button>';
+    profileScrim.classList.add('show');
+    $('capSel').addEventListener('change',function(){var v=$('capSel').value;rec.override=v===''?null:parseInt(v,10);renderRecipientList();});
+    $('closeProfile').addEventListener('click',function(){profileScrim.classList.remove('show');});
+  }
+  profileScrim.addEventListener('click',function(e){if(e.target===profileScrim)profileScrim.classList.remove('show');});
+
+  /* ---- send ---- */
+  var processScrim=$('processScrim'),processModal=$('processModal');
+  var STEPS=[{t:'Uploading your master'},{t:'Creating watermarked previews'},{t:'Sending secure links'}];
+  function renderProcessing(active){
+    var html='<div class="pipe">';
+    STEPS.forEach(function(s,i){var cls=i<active?'done':(i===active?'active':'');var inner=i<active?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>':(i===active?'<span class="spin"></span>':'');html+='<div class="pl '+cls+'"><span class="dot">'+inner+'</span>'+s.t+'</div>';});
+    html+='</div>';
+    processModal.innerHTML='<h3>Sending your reel</h3><p class="lede">You can close this and walk away &mdash; everyone gets an email the moment it&rsquo;s ready.</p>'+html;
+  }
+  function renderSent(recs){
+    var list='<div class="sentlist">';
+    recs.forEach(function(rec){var col=rec.kind==='person'?avaColor(rec.pid):avaColor(rec.id);list+='<div class="sr"><div class="ava" style="background:'+col+'">'+initials(rec.name)+'</div><div class="si"><div class="nm">'+esc(rec.name)+'</div><div class="em">'+esc(rec.email)+'</div></div><span class="cp">'+fmt(effCap(rec))+'</span></div>';});
+    list+='</div>';
+    processModal.innerHTML='<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Links sent</h3><p class="lede">'+recs.length+' '+(recs.length===1?'person has':'people have')+' a private, watermarked link to your film.</p>'+list+'<p class="note2">Each person can pull up to the length shown and download a clean cut.</p><button class="modalbtn" id="sendAnother">Send another</button>';
+    $('sendAnother').addEventListener('click',resetAll);
+  }
+  function resetAll(){
+    processScrim.classList.remove('show');clearFile();
+    state.recipients=[];state.projectId='';projsel.value='';
+    if(custName)custName.value='';if(custEmail)custEmail.value='';
+    pickRowEls={};
+    if(state.src==='project')renderProjPick();else if(state.src==='database')renderRoster();
+    renderRecipientList();refresh();
+  }
+  $('sendbtn').addEventListener('click',function(){
+    if(!state.file||state.recipients.length===0)return;
+    var recs=state.recipients.slice();
+    processScrim.classList.add('show');var i=0;renderProcessing(0);
+    var t=setInterval(function(){i++;if(i>=STEPS.length){clearInterval(t);renderSent(recs);}else renderProcessing(i);},1100);
+  });
+
+  renderProjPick();renderRecipientList();refresh();
+})();
+</script>
+</body>
+</html>
