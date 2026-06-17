@@ -231,15 +231,23 @@ async function processCut(jobId, assetId, clips) {
   const outFile = path.join(os.tmpdir(), 'mr-reel-' + jobId + '.mp4');
   try {
     job.status = 'processing'; job.phase = 'preparing';
-    // 1) enable temporary access to the master (highest-quality, clean) file
-    await muxFetch('/video/v1/assets/' + assetId + '/master-access', { method: 'PUT', body: { master_access: 'temporary' } });
-    // 2) poll until the master URL is ready
+    // 1) check current master state; only request access if it isn't already available
     let url = null;
-    for (let i = 0; i < 60; i++) {
-      const a = await muxFetch('/video/v1/assets/' + assetId);
-      if (a.master && a.master.status === 'ready' && a.master.url) { url = a.master.url; break; }
-      if (a.master && a.master.status === 'errored') throw new Error('Master preparation failed');
-      await sleep(3000);
+    const asset = await muxFetch('/video/v1/assets/' + assetId);
+    if (asset.master && asset.master.status === 'ready' && asset.master.url) {
+      url = asset.master.url; // already prepared (e.g. by a previous attempt) — reuse it
+    } else {
+      // request temporary master access; ignore an "already exists" error from a prior request
+      try {
+        await muxFetch('/video/v1/assets/' + assetId + '/master-access', { method: 'PUT', body: { master_access: 'temporary' } });
+      } catch (e) { /* already requested/preparing — fall through to polling */ }
+      // 2) poll until the master URL is ready (master prep can take a few minutes)
+      for (let i = 0; i < 180; i++) {
+        const a = await muxFetch('/video/v1/assets/' + assetId);
+        if (a.master && a.master.status === 'ready' && a.master.url) { url = a.master.url; break; }
+        if (a.master && a.master.status === 'errored') throw new Error('Master preparation failed');
+        await sleep(4000);
+      }
     }
     if (!url) throw new Error('Timed out preparing the master file');
     // 3) stream the master to a temp file (handles large originals without buffering in memory)
