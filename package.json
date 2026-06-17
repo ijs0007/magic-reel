@@ -1,6 +1,6 @@
 {
   "name": "magic-reel",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Magic Reel — share film footage so cast & crew build their own reels. Each selected range is clipped from the master on Mux; the server joins the clips with an FFmpeg stream copy (no re-encoding).",
   "main": "server.js",

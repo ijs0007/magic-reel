@@ -5,9 +5,11 @@
 //   1. Each selected range becomes its OWN single-range Mux clip, cut straight from
 //      the MASTER asset (frame-accurate, full quality). All trimming/decoding happens
 //      on Mux — never on our server. Each clip also gets a downloadable "highest" MP4.
-//   2. We pull those clip MP4s and join them with FFmpeg's concat demuxer using
-//      STREAM COPY (-c copy) — no re-encoding. This is bounded by disk I/O, not CPU,
-//      so it won't time out the basic tier the way libx264 did.
+//   2. We pull those clip MP4s and join them with FFmpeg: video is STREAM-COPIED (the
+//      expensive part never re-encodes), and audio is re-encoded into one continuous
+//      track so there's no click at a seam (stream-copying independently-encoded AAC
+//      leaves a ~18ms overlap at each join). Audio-only encode is cheap, so this stays
+//      light on the basic tier — nothing like the libx264 path that timed out.
 //   3. We delete the Mux clip assets the moment the stitch succeeds (the finished reel
 //      lives locally by then), so Mux storage trends to ~0.
 //
@@ -32,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.3.0 — 🧵 Stitch';
+const APP_VERSION = 'v0.3.1 — 🧵 Stitch: clean audio seams';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -314,6 +316,18 @@ async function downloadToFile(url, dest) {
   await fs.promises.writeFile(dest, Readable.fromWeb(r.body));
 }
 
+// Join the clips into one MP4. Video is STREAM-COPIED (pristine, fast — the expensive
+// part never re-encodes). Audio is re-encoded into one continuous AAC track, which
+// removes the ~18ms timestamp overlap you get when stream-copying independently-encoded
+// AAC at a seam (the source of any faint click at a join). Audio-only encode is cheap,
+// so this stays light on the basic tier.
+async function stitchClips(localPaths, tmpDir, outPath) {
+  const listPath = path.join(tmpDir, 'list.txt');
+  await fs.promises.writeFile(listPath, concatListText(localPaths));
+  await runFfmpeg(['-hide_banner', '-y', '-f', 'concat', '-safe', '0', '-i', listPath,
+    '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outPath]);
+}
+
 // Best-effort: delete every Mux clip asset for this job so we don't accrue storage.
 function deleteClipAssets(job) {
   if (!job || !Array.isArray(job.clipAssetIds)) return;
@@ -384,13 +398,10 @@ async function processReelViaMux(jobId, masterAssetId, clips, filmName) {
       localPaths.push(dest);
     }
 
-    // 4) Stream-copy join (no re-encode).
+    // 4) Join into one MP4: video stream-copied, audio re-encoded for clean seams.
     job.phase = 'stitching';
-    const listPath = path.join(job.tmpDir, 'list.txt');
-    await fs.promises.writeFile(listPath, concatListText(localPaths));
     const outPath = path.join(job.tmpDir, 'reel.mp4');
-    await runFfmpeg(['-hide_banner', '-y', '-f', 'concat', '-safe', '0', '-i', listPath,
-      '-c', 'copy', '-movflags', '+faststart', outPath]);
+    await stitchClips(localPaths, job.tmpDir, outPath);
 
     // 5) We have the finished reel locally -> free the Mux clip assets immediately.
     deleteClipAssets(job);
