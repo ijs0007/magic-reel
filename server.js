@@ -6,7 +6,13 @@
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const { spawn } = require('child_process');
+const { Readable } = require('stream');
 const { Pool } = require('pg');
+let ffmpegPath = null;
+try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -174,6 +180,127 @@ app.get('/api/sends/:id', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// --- The clean cut (FFmpeg): turn the chosen ranges into one clean, watermark-free MP4 ---
+const cuts = new Map(); // jobId -> { status, phase, file, error, filmName, createdAt }
+const MAX_CUT_SECONDS = 600;
+
+function sanitizeClips(arr, duration) {
+  if (!Array.isArray(arr) || !arr.length) return null;
+  const out = [];
+  for (const c of arr) {
+    if (!Array.isArray(c) || c.length < 2) return null;
+    let a = Number(c[0]), b = Number(c[1]);
+    if (!isFinite(a) || !isFinite(b)) return null;
+    a = Math.max(0, a);
+    if (duration) b = Math.min(b, duration);
+    if (b - a < 0.1) return null;
+    out.push([Math.round(a * 1000) / 1000, Math.round(b * 1000) / 1000]);
+  }
+  return out;
+}
+
+// Trim each range and concatenate them into one clean MP4 (validated against ffmpeg 6.x).
+function buildCutArgs(input, clips, output) {
+  const parts = []; let cat = '';
+  clips.forEach(function (c, i) {
+    parts.push('[0:v]trim=start=' + c[0] + ':end=' + c[1] + ',setpts=PTS-STARTPTS[v' + i + ']');
+    parts.push('[0:a]atrim=start=' + c[0] + ':end=' + c[1] + ',asetpts=PTS-STARTPTS[a' + i + ']');
+    cat += '[v' + i + '][a' + i + ']';
+  });
+  const filter = parts.join(';') + ';' + cat + 'concat=n=' + clips.length + ':v=1:a=1[outv][outa]';
+  return ['-y', '-i', input, '-filter_complex', filter, '-map', '[outv]', '-map', '[outa]',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', output];
+}
+
+function runFfmpeg(args) {
+  return new Promise(function (resolve, reject) {
+    const proc = spawn(ffmpegPath, args);
+    let err = '';
+    proc.stderr.on('data', function (d) { err += d.toString(); if (err.length > 4000) err = err.slice(-4000); });
+    proc.on('error', reject);
+    proc.on('close', function (code) { code === 0 ? resolve() : reject(new Error('FFmpeg failed: ' + err.slice(-400))); });
+  });
+}
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+async function processCut(jobId, assetId, clips) {
+  const job = cuts.get(jobId); if (!job) return;
+  const masterFile = path.join(os.tmpdir(), 'mr-master-' + jobId + '.mp4');
+  const outFile = path.join(os.tmpdir(), 'mr-reel-' + jobId + '.mp4');
+  try {
+    job.status = 'processing'; job.phase = 'preparing';
+    // 1) enable temporary access to the master (highest-quality, clean) file
+    await muxFetch('/video/v1/assets/' + assetId + '/master-access', { method: 'PUT', body: { master_access: 'temporary' } });
+    // 2) poll until the master URL is ready
+    let url = null;
+    for (let i = 0; i < 60; i++) {
+      const a = await muxFetch('/video/v1/assets/' + assetId);
+      if (a.master && a.master.status === 'ready' && a.master.url) { url = a.master.url; break; }
+      if (a.master && a.master.status === 'errored') throw new Error('Master preparation failed');
+      await sleep(3000);
+    }
+    if (!url) throw new Error('Timed out preparing the master file');
+    // 3) stream the master to a temp file (handles large originals without buffering in memory)
+    job.phase = 'downloading';
+    const r = await fetch(url);
+    if (!r.ok || !r.body) throw new Error('Could not download master (' + r.status + ')');
+    await new Promise(function (resolve, reject) {
+      const ws = fs.createWriteStream(masterFile);
+      Readable.fromWeb(r.body).pipe(ws);
+      ws.on('finish', resolve); ws.on('error', reject);
+    });
+    // 4) cut + concatenate into one clean MP4
+    job.phase = 'rendering';
+    if (!ffmpegPath) throw new Error('FFmpeg is not available on the server');
+    await runFfmpeg(buildCutArgs(masterFile, clips, outFile));
+    job.file = outFile; job.status = 'ready'; job.phase = 'ready';
+  } catch (e) {
+    job.status = 'error'; job.phase = 'error'; job.error = e.message;
+  } finally {
+    try { if (fs.existsSync(masterFile)) fs.unlinkSync(masterFile); } catch (e) {}
+  }
+}
+
+// Start a cut job for the chosen ranges.
+app.post('/api/sends/:id/cut', async (req, res) => {
+  if (!muxConfigured()) return res.status(503).json({ error: 'Mux is not configured yet.' });
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const q = await pool.query('SELECT * FROM reel_sends WHERE id = $1', [req.params.id]);
+    if (!q.rows.length) return res.status(404).json({ error: 'Not found' });
+    const row = q.rows[0];
+    if (!row.asset_id || row.status !== 'ready') return res.status(409).json({ error: 'This film isn\u2019t ready yet.' });
+    const clips = sanitizeClips(req.body && req.body.clips, row.duration);
+    if (!clips) return res.status(400).json({ error: 'No valid clips were provided.' });
+    const total = clips.reduce(function (a, c) { return a + (c[1] - c[0]); }, 0);
+    if (total > MAX_CUT_SECONDS) return res.status(400).json({ error: 'That selection is too long.' });
+    const jobId = crypto.randomUUID();
+    cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: row.film_name, createdAt: Date.now() });
+    res.json({ jobId: jobId });
+    processCut(jobId, row.asset_id, clips); // run in the background
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Poll a cut job's progress.
+app.get('/api/cuts/:jobId', (req, res) => {
+  const job = cuts.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Not found' });
+  res.json({ status: job.status, phase: job.phase, error: job.error || null });
+});
+
+// Download the finished reel (single-use; the temp file is cleaned up after sending).
+app.get('/api/cuts/:jobId/download', (req, res) => {
+  const job = cuts.get(req.params.jobId);
+  if (!job || job.status !== 'ready' || !job.file || !fs.existsSync(job.file)) return res.status(404).json({ error: 'Not ready' });
+  const safe = (job.filmName || 'reel').replace(/[^a-z0-9 _-]/gi, '').trim().slice(0, 60) || 'reel';
+  res.download(job.file, safe + ' - reel.mp4', function () {
+    try { if (fs.existsSync(job.file)) fs.unlinkSync(job.file); } catch (e) {}
+    cuts.delete(req.params.jobId);
+  });
 });
 
 if (pool) ensureSchema().then(() => console.log('reel_sends table ready')).catch(e => console.error('schema error:', e.message));

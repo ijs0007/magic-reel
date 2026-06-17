@@ -214,7 +214,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.3 &mdash; &#9733; MSM Skin &middot; actor side, matched look</footer>
+  <footer class="ver">Magic Reel &middot; v0.6 &mdash; &#9986;&#65039; Clean cut: real watermark-free reel from the master</footer>
 </div>
 
 <div class="bar">
@@ -274,7 +274,7 @@
   var stageMsg=$('stageMsg');
   function showMsg(txt,spin){ stageMsg.innerHTML='<div class="sm-in">'+(spin?'<div class="spin2"></div>':'')+'<span>'+txt+'</span></div>'; stageMsg.style.display='flex'; }
   function hideMsg(){ stageMsg.style.display='none'; }
-  function loadFilm(j){ CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } player.setAttribute('playback-id', j.playbackId); hideMsg(); }
+  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } player.setAttribute('playback-id', j.playbackId); hideMsg(); }
   var loadPoll=null;
   function checkSend(id){ fetch('/api/sends/'+id+'/status').then(function(r){return r.json();}).then(function(j){ if(j.status==='ready'&&j.playbackId){ clearTimeout(loadPoll); loadFilm(j); } else if(j.status==='error'){ clearTimeout(loadPoll); showMsg('This film couldn\u2019t be processed.',false); } else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(function(){checkSend(id);},3000); } }).catch(function(){ loadPoll=setTimeout(function(){checkSend(id);},4000); }); }
   showMsg('Loading your footage\u2026',true);
@@ -328,16 +328,42 @@
     $('barFill').style.width=Math.min(100,p)+'%';$('dlBtn').disabled=n===0;updateCandidate();
   }
 
-  var dlScrim=$('dlScrim'),dlModal=$('dlModal');
-  var STEPS=[{t:'Pulling your selects from the master'},{t:'Rendering a clean, watermark-free cut'}];
-  function renderProc(active){var html='<div class="pipe">';STEPS.forEach(function(s,i){var cls=i<active?'done':(i===active?'active':'');var inner=i<active?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>':(i===active?'<span class="spin"></span>':'');html+='<div class="pl '+cls+'"><span class="dot">'+inner+'</span>'+s.t+'</div>';});html+='</div>';dlModal.innerHTML='<h3>Building your reel</h3><p class="lede">Your clean cut is being made from the high-res master.</p>'+html;}
-  function renderReady(){
-    var u=used(),n=st.segments.length;
-    dlModal.innerHTML='<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Your reel is ready</h3><p class="lede">Clean, no watermark \u2014 in '+CTX.film+'\u2019s format.</p><div class="summary"><div class="row"><span class="k">Clips</span><span class="v">'+n+'</span></div><div class="row"><span class="k">Total length</span><span class="v">'+fmt(u)+'</span></div><div class="row"><span class="k">Quality</span><span class="v">Up to source</span></div><div class="row"><span class="k">Watermark</span><span class="v">None</span></div></div><button class="modalbtn" id="saveBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>Save to device</button><button class="modalghost" id="closeDl">Back to selecting</button><p class="protonote">Prototype: no real file is produced yet. In the live app this saves your clean reel, and the download counts against your '+fmt(CTX.budget)+' \u2014 switching browsers or devices won\u2019t reset it.</p>';
-    $('saveBtn').addEventListener('click',function(){$('saveBtn').innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Saved (prototype)';$('saveBtn').style.background='var(--good)';});
+  var dlScrim=$('dlScrim'),dlModal=$('dlModal'),cutPoll=null;
+  var PHASE_TXT={queued:'Queued\u2026',preparing:'Preparing your footage\u2026',downloading:'Fetching the master\u2026',rendering:'Rendering your clean cut\u2026'};
+  function renderProc(phase){
+    var txt=PHASE_TXT[phase]||'Working\u2026';
+    dlModal.innerHTML='<h3>Building your reel</h3><p class="lede">Your clean, watermark-free cut is being made from the master \u2014 this can take a moment.</p><div class="pipe"><div class="pl active"><span class="dot"><span class="spin"></span></span>'+txt+'</div></div>';
+  }
+  function renderErr(msg){
+    dlModal.innerHTML='<h3>Couldn\u2019t build the reel</h3><p class="lede">'+(msg||'Something went wrong.')+'</p><button class="modalbtn" id="dlRetry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>Try again</button><button class="modalghost" id="closeDl">Back to selecting</button>';
+    $('dlRetry').addEventListener('click',startCut);
     $('closeDl').addEventListener('click',function(){dlScrim.classList.remove('show');});
   }
-  $('dlBtn').addEventListener('click',function(){if(!st.segments.length)return;if(st.playing)setPlaying(false);dlScrim.classList.add('show');var i=0;renderProc(0);var t=setInterval(function(){i++;if(i>=STEPS.length){clearInterval(t);renderReady();}else renderProc(i);},1050);});
+  function renderReady(jobId){
+    var u=used(),n=st.segments.length;
+    dlModal.innerHTML='<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Your reel is ready</h3><p class="lede">Clean, no watermark \u2014 cut from the master.</p><div class="summary"><div class="row"><span class="k">Clips</span><span class="v">'+n+'</span></div><div class="row"><span class="k">Total length</span><span class="v">'+fmt(u)+'</span></div><div class="row"><span class="k">Quality</span><span class="v">Up to source</span></div><div class="row"><span class="k">Watermark</span><span class="v">None</span></div></div><button class="modalbtn" id="saveBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>Save to device</button><button class="modalghost" id="closeDl">Back to selecting</button>';
+    $('saveBtn').addEventListener('click',function(){var a=document.createElement('a');a.href='/api/cuts/'+jobId+'/download';a.download='';document.body.appendChild(a);a.click();a.remove();});
+    $('closeDl').addEventListener('click',function(){dlScrim.classList.remove('show');});
+  }
+  function pollCut(jobId){
+    clearTimeout(cutPoll);
+    fetch('/api/cuts/'+jobId).then(function(r){return r.json();}).then(function(j){
+      if(j.status==='ready') renderReady(jobId);
+      else if(j.status==='error') renderErr(j.error||'The cut failed.');
+      else { renderProc(j.phase||'rendering'); cutPoll=setTimeout(function(){pollCut(jobId);},2000); }
+    }).catch(function(){ cutPoll=setTimeout(function(){pollCut(jobId);},3000); });
+  }
+  function startCut(){
+    if(!st.segments.length) return;
+    if(!CTX.sendId){ dlScrim.classList.add('show'); renderErr('No film is loaded yet.'); return; }
+    if(st.playing) setPlaying(false);
+    dlScrim.classList.add('show'); renderProc('queued');
+    fetch('/api/sends/'+CTX.sendId+'/cut',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clips:st.segments.map(function(s){return [s.in,s.out];})})})
+      .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+      .then(function(res){ if(!res.ok){ renderErr(res.j.error||'Server error.'); return; } pollCut(res.j.jobId); })
+      .catch(function(){ renderErr('Couldn\u2019t reach the server.'); });
+  }
+  $('dlBtn').addEventListener('click',startCut);
   dlScrim.addEventListener('click',function(e){if(e.target===dlScrim)dlScrim.classList.remove('show');});
 
   render();updateMarkers();renderSegments();renderBudget();
