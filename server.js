@@ -214,7 +214,7 @@ function buildCutArgs(videoFile, audioFile, clips, output) {
   const args = ['-hide_banner', '-y', '-i', videoFile];
   if (audioFile) args.push('-i', audioFile);
   args.push('-filter_complex', filter, '-map', '[outv]', '-map', '[outa]',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', output);
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-maxrate', '8M', '-bufsize', '16M', '-threads', '0', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', output);
   return args;
 }
 
@@ -222,7 +222,7 @@ function runFfmpeg(args) {
   return new Promise(function (resolve, reject) {
     const proc = spawn(ffmpegPath, args);
     let err = '';
-    const killer = setTimeout(function () { try { proc.kill('SIGKILL'); } catch (e) {} reject(new Error('Render timed out')); }, 8 * 60 * 1000);
+    const killer = setTimeout(function () { try { proc.kill('SIGKILL'); } catch (e) {} reject(new Error('Render timed out')); }, 6 * 60 * 1000);
     proc.stderr.on('data', function (d) { err += d.toString(); if (err.length > 4000) err = err.slice(-4000); });
     proc.on('error', function (e) { clearTimeout(killer); reject(e); });
     proc.on('close', function (code) { clearTimeout(killer); code === 0 ? resolve() : reject(new Error('FFmpeg failed: ' + err.slice(-400))); });
