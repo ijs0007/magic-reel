@@ -202,16 +202,20 @@ function sanitizeClips(arr, duration) {
 }
 
 // Trim each range and concatenate them into one clean MP4 (validated against ffmpeg 6.x).
-function buildCutArgs(input, clips, output) {
+function buildCutArgs(videoFile, audioFile, clips, output) {
+  const aIn = audioFile ? '1' : '0';
   const parts = []; let cat = '';
   clips.forEach(function (c, i) {
     parts.push('[0:v]trim=start=' + c[0] + ':end=' + c[1] + ',setpts=PTS-STARTPTS[v' + i + ']');
-    parts.push('[0:a]atrim=start=' + c[0] + ':end=' + c[1] + ',asetpts=PTS-STARTPTS[a' + i + ']');
+    parts.push('[' + aIn + ':a]atrim=start=' + c[0] + ':end=' + c[1] + ',asetpts=PTS-STARTPTS[a' + i + ']');
     cat += '[v' + i + '][a' + i + ']';
   });
   const filter = parts.join(';') + ';' + cat + 'concat=n=' + clips.length + ':v=1:a=1[outv][outa]';
-  return ['-hide_banner', '-y', '-i', input, '-filter_complex', filter, '-map', '[outv]', '-map', '[outa]',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', output];
+  const args = ['-hide_banner', '-y', '-i', videoFile];
+  if (audioFile) args.push('-i', audioFile);
+  args.push('-filter_complex', filter, '-map', '[outv]', '-map', '[outa]',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', output);
+  return args;
 }
 
 function runFfmpeg(args) {
@@ -226,31 +230,40 @@ function runFfmpeg(args) {
 }
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-// Read the master playlist and return the highest-bitrate rendition's URL (top quality).
-async function highestVariantUrl(masterUrl) {
-  try {
-    const res = await fetch(masterUrl);
-    if (!res.ok) return masterUrl;
-    const lines = (await res.text()).split(/\r?\n/);
-    let best = null, bestBw = -1;
-    for (let i = 0; i < lines.length; i++) {
-      const ln = lines[i].trim();
-      if (ln.startsWith('#EXT-X-STREAM-INF')) {
-        const m = ln.match(/BANDWIDTH=(\d+)/); const bw = m ? parseInt(m[1], 10) : 0;
-        let j = i + 1; while (j < lines.length && (!lines[j].trim() || lines[j].trim().startsWith('#'))) j++;
-        const uri = lines[j] ? lines[j].trim() : null;
-        if (uri && bw > bestBw) { bestBw = bw; best = uri; }
-      }
+// Read the master playlist: pick the highest-RESOLUTION video rendition and the audio rendition (Mux serves them separately).
+async function parseMaster(masterUrl) {
+  const res = await fetch(masterUrl);
+  if (!res.ok) throw new Error('Could not read the stream playlist (' + res.status + ')');
+  const lines = (await res.text()).split(/\r?\n/);
+  const audios = {}; let firstAudio = null;
+  let best = null, bestScore = -1, bestAudioGroup = null;
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i].trim();
+    if (ln.startsWith('#EXT-X-MEDIA') && /TYPE=AUDIO/.test(ln)) {
+      const g = (ln.match(/GROUP-ID="([^"]+)"/) || [])[1];
+      const u = (ln.match(/URI="([^"]+)"/) || [])[1];
+      if (u) { if (g) audios[g] = u; if (!firstAudio) firstAudio = u; }
+    } else if (ln.startsWith('#EXT-X-STREAM-INF')) {
+      const rm = ln.match(/RESOLUTION=(\d+)x(\d+)/);
+      const area = rm ? parseInt(rm[1], 10) * parseInt(rm[2], 10) : 0;
+      const bw = parseInt((ln.match(/BANDWIDTH=(\d+)/) || [])[1] || '0', 10);
+      const score = area * 1e9 + bw; // resolution dominates; bandwidth breaks ties
+      const ag = (ln.match(/AUDIO="([^"]+)"/) || [])[1] || null;
+      let j = i + 1; while (j < lines.length && (!lines[j].trim() || lines[j].trim().startsWith('#'))) j++;
+      const uri = lines[j] ? lines[j].trim() : null;
+      if (uri && score > bestScore) { bestScore = score; best = uri; bestAudioGroup = ag; }
     }
-    return best ? new URL(best, masterUrl).toString() : masterUrl;
-  } catch (e) { return masterUrl; }
+  }
+  if (!best) return { videoUrl: masterUrl, audioUrl: null }; // already a media playlist (audio likely muxed)
+  const videoUrl = new URL(best, masterUrl).toString();
+  const aRel = (bestAudioGroup && audios[bestAudioGroup]) || firstAudio;
+  return { videoUrl: videoUrl, audioUrl: aRel ? new URL(aRel, masterUrl).toString() : null };
 }
 
-// Download the top rendition's segments to one local file (Node does the network, not FFmpeg).
-async function downloadRendition(playbackId, jobId) {
-  const variantUrl = await highestVariantUrl('https://stream.mux.com/' + playbackId + '.m3u8');
-  const r0 = await fetch(variantUrl);
-  if (!r0.ok) throw new Error('Could not read the stream playlist (' + r0.status + ')');
+// Download every segment of a media playlist into one local file (Node does the network, not FFmpeg).
+async function downloadPlaylist(playlistUrl, destFile) {
+  const r0 = await fetch(playlistUrl);
+  if (!r0.ok) throw new Error('Could not read a stream playlist (' + r0.status + ')');
   const lines = (await r0.text()).split(/\r?\n/);
   let initUri = null; const segs = [];
   for (const raw of lines) {
@@ -258,36 +271,41 @@ async function downloadRendition(playbackId, jobId) {
     if (ln.startsWith('#EXT-X-MAP')) { const m = ln.match(/URI="([^"]+)"/); if (m) initUri = m[1]; }
     else if (ln && !ln.startsWith('#')) segs.push(ln);
   }
-  if (!segs.length) throw new Error('No video segments found in the stream');
-  const dest = path.join(os.tmpdir(), 'mr-src-' + jobId + (initUri ? '.mp4' : '.ts'));
-  if (fs.existsSync(dest)) fs.unlinkSync(dest);
+  if (!segs.length) throw new Error('No segments found in a stream playlist');
+  if (fs.existsSync(destFile)) fs.unlinkSync(destFile);
   async function append(u) {
     const r = await fetch(u);
     if (!r.ok) throw new Error('A stream segment failed to download (' + r.status + ')');
-    await fs.promises.appendFile(dest, Buffer.from(await r.arrayBuffer()));
+    await fs.promises.appendFile(destFile, Buffer.from(await r.arrayBuffer()));
   }
-  if (initUri) await append(new URL(initUri, variantUrl).toString());
-  for (const s of segs) await append(new URL(s, variantUrl).toString());
-  return dest;
+  if (initUri) await append(new URL(initUri, playlistUrl).toString());
+  for (const s of segs) await append(new URL(s, playlistUrl).toString());
 }
 
 async function processCut(jobId, playbackId, clips) {
   const job = cuts.get(jobId); if (!job) return;
-  let srcFile = null;
+  let videoFile = null, audioFile = null;
   const outFile = path.join(os.tmpdir(), 'mr-reel-' + jobId + '.mp4');
   try {
     if (!ffmpegPath) throw new Error('FFmpeg is not available on the server');
-    // 1) pull the clean stream's top rendition down to a local file
+    // 1) find the top rendition + its audio, then pull both down locally
     job.status = 'processing'; job.phase = 'downloading';
-    srcFile = await downloadRendition(playbackId, jobId);
-    // 2) cut + concatenate the local file into one clean MP4
+    const { videoUrl, audioUrl } = await parseMaster('https://stream.mux.com/' + playbackId + '.m3u8');
+    videoFile = path.join(os.tmpdir(), 'mr-vid-' + jobId + '.ts');
+    await downloadPlaylist(videoUrl, videoFile);
+    if (audioUrl) {
+      audioFile = path.join(os.tmpdir(), 'mr-aud-' + jobId + '.ts');
+      await downloadPlaylist(audioUrl, audioFile);
+    }
+    // 2) cut + concatenate (video + audio) into one clean MP4
     job.phase = 'rendering';
-    await runFfmpeg(buildCutArgs(srcFile, clips, outFile));
+    await runFfmpeg(buildCutArgs(videoFile, audioFile, clips, outFile));
     job.file = outFile; job.status = 'ready'; job.phase = 'ready';
   } catch (e) {
     job.status = 'error'; job.phase = 'error'; job.error = e.message;
   } finally {
-    try { if (srcFile && fs.existsSync(srcFile)) fs.unlinkSync(srcFile); } catch (e) {}
+    try { if (videoFile && fs.existsSync(videoFile)) fs.unlinkSync(videoFile); } catch (e) {}
+    try { if (audioFile && fs.existsSync(audioFile)) fs.unlinkSync(audioFile); } catch (e) {}
   }
 }
 
