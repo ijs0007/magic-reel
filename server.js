@@ -1,18 +1,30 @@
-// Magic Reel — engine (skeleton)
-// A small standalone service: serves the app pages and proves the
-// pipeline (subdomain + Render + shared Neon database). Video upload,
-// preview, the metered budget, and the clean cut arrive in later milestones.
+// Magic Reel — engine
+// v0.2.0 — ✂️ Mux Cut: clip + concat on Mux, server just relays
+//
+// The clean cut no longer encodes on our server. We ask Mux to cut the chosen
+// ranges straight from the MASTER asset (full quality) and concatenate them into
+// one new asset, and to produce a downloadable MP4 in the same call. Our server
+// then does ZERO video processing — it just streams that finished MP4 through to
+// the recipient (keeping the Mux URL private and setting a clean filename), and
+// deletes the clip asset afterward so storage stays at ~0.
+//
+// Why this shape:
+//  - No libx264 / FFmpeg on the box  -> fast, and free of CPU timeouts on the basic tier.
+//  - Static MP4 = audio + video in ONE file -> the "audio is a separate HLS track"
+//    gotcha disappears structurally (we never touch HLS renditions anymore).
+//  - "highest" static rendition on the basic tier is free to encode (storage + delivery only).
+//
+// Each cut returns a RECEIPT (requested vs actual duration, concat check, MP4 status)
+// so we can verify Mux's multi-range concatenation against real footage instead of
+// trusting docs. See /api/cuts/:jobId.
 
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
-const fs = require('fs');
-const os = require('os');
-const { spawn } = require('child_process');
 const { Readable } = require('stream');
 const { Pool } = require('pg');
-let ffmpegPath = null;
-try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
+
+const APP_VERSION = 'v0.2.0 — ✂️ Mux Cut';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -81,14 +93,18 @@ app.get('/r/:token?', (req, res) =>
 
 // --- health check: confirms the service is up and the database is reachable ---
 app.get('/health', async (req, res) => {
-  if (!pool) return res.json({ ok: true, db: 'not configured' });
+  const base = { ok: true, version: APP_VERSION, mux: muxConfigured() };
+  if (!pool) return res.json(Object.assign(base, { db: 'not configured' }));
   try {
     const r = await pool.query('SELECT now() AS now');
-    res.json({ ok: true, db: 'connected', now: r.rows[0].now });
+    res.json(Object.assign(base, { db: 'connected', now: r.rows[0].now }));
   } catch (e) {
-    res.status(500).json({ ok: false, db: 'error', error: e.message });
+    res.status(500).json({ ok: false, version: APP_VERSION, db: 'error', error: e.message });
   }
 });
+
+// Quick read-only version check.
+app.get('/version', (req, res) => res.json({ version: APP_VERSION }));
 
 // --- Milestone 2: real video via Mux ---
 
@@ -182,10 +198,18 @@ app.get('/api/sends/:id', async (req, res) => {
   }
 });
 
-// --- The clean cut (FFmpeg): turn the chosen ranges into one clean, watermark-free MP4 ---
-const cuts = new Map(); // jobId -> { status, phase, file, error, filmName, createdAt }
+// --- The clean cut (Mux): cut the chosen ranges from the master, concatenate on
+//     Mux, get one downloadable MP4 back, relay it. No encoding on this server. ---
+const cuts = new Map(); // jobId -> { status, phase, error, filmName, createdAt, clipAssetId, clipPlaybackId, mp4Name, ... }
 const MAX_CUT_SECONDS = 600;
+const MIN_CLIP_SECONDS = 0.5;   // Mux requires clips of at least 500 ms
+const POLL_MS = 2500;
+const CUT_TIMEOUT_MS = 6 * 60 * 1000;
 
+function round2(n) { return Math.round(n * 100) / 100; }
+
+// Validate + clean the requested ranges. Returns an array of [start,end] (ms-rounded
+// seconds) or null if nothing usable. Each range must be at least MIN_CLIP_SECONDS.
 function sanitizeClips(arr, duration) {
   if (!Array.isArray(arr) || !arr.length) return null;
   const out = [];
@@ -195,117 +219,114 @@ function sanitizeClips(arr, duration) {
     if (!isFinite(a) || !isFinite(b)) return null;
     a = Math.max(0, a);
     if (duration) b = Math.min(b, duration);
-    if (b - a < 0.1) return null;
+    if (b - a < MIN_CLIP_SECONDS) return null;
     out.push([Math.round(a * 1000) / 1000, Math.round(b * 1000) / 1000]);
   }
   return out;
 }
 
-// Trim each range and concatenate them into one clean MP4 (validated against ffmpeg 6.x).
-function buildCutArgs(videoFile, audioFile, clips, output) {
-  const aIn = audioFile ? '1' : '0';
-  const parts = []; let cat = '';
-  clips.forEach(function (c, i) {
-    parts.push('[0:v]trim=start=' + c[0] + ':end=' + c[1] + ',setpts=PTS-STARTPTS[v' + i + ']');
-    parts.push('[' + aIn + ':a]atrim=start=' + c[0] + ':end=' + c[1] + ',asetpts=PTS-STARTPTS[a' + i + ']');
-    cat += '[v' + i + '][a' + i + ']';
-  });
-  const filter = parts.join(';') + ';' + cat + 'concat=n=' + clips.length + ':v=1:a=1[outv][outa]';
-  const args = ['-hide_banner', '-y', '-i', videoFile];
-  if (audioFile) args.push('-i', audioFile);
-  args.push('-filter_complex', filter, '-map', '[outv]', '-map', '[outa]',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-maxrate', '8M', '-bufsize', '16M', '-threads', '0', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', output);
-  return args;
+// Sum of selected seconds.
+function sumSeconds(clips) {
+  return clips.reduce(function (a, c) { return a + (c[1] - c[0]); }, 0);
 }
 
-function runFfmpeg(args) {
-  return new Promise(function (resolve, reject) {
-    const proc = spawn(ffmpegPath, args);
-    let err = '';
-    const killer = setTimeout(function () { try { proc.kill('SIGKILL'); } catch (e) {} reject(new Error('Render timed out')); }, 6 * 60 * 1000);
-    proc.stderr.on('data', function (d) { err += d.toString(); if (err.length > 4000) err = err.slice(-4000); });
-    proc.on('error', function (e) { clearTimeout(killer); reject(e); });
-    proc.on('close', function (code) { clearTimeout(killer); code === 0 ? resolve() : reject(new Error('FFmpeg failed: ' + err.slice(-400))); });
+// Build the Mux create-asset `inputs` array: one clip per range, all from the same
+// master asset. Mux concatenates them in order into a single new asset.
+function buildClipInputs(masterAssetId, clips) {
+  return clips.map(function (c) {
+    return { url: 'mux://assets/' + masterAssetId, start_time: c[0], end_time: c[1] };
   });
 }
+
+// From an asset's static_renditions object, return the first ready downloadable MP4
+// (video). Ignores audio-only .m4a. Returns the file object or null.
+function pickReadyMp4(sr) {
+  if (!sr || !Array.isArray(sr.files)) return null;
+  return sr.files.find(function (f) {
+    return f && f.status === 'ready' && typeof f.name === 'string' && /\.mp4$/i.test(f.name);
+  }) || null;
+}
+
+// A small summary of static-rendition progress for the receipt while it's still cooking.
+function summarizeSR(sr) {
+  if (!sr) return null;
+  const f = Array.isArray(sr.files)
+    ? sr.files.find(function (x) { return x && typeof x.name === 'string' && /\.mp4$/i.test(x.name); })
+    : null;
+  return f ? { name: f.name, status: f.status } : { status: sr.status || 'preparing' };
+}
+
+// Sanity check: does the concatenated asset's duration match the sum of the ranges
+// we asked for? (Allow a little slack for frame-boundary rounding across N cuts.)
+function concatLooksCorrect(requested, actual, n) {
+  if (typeof actual !== 'number' || typeof requested !== 'number') return null;
+  const tol = Math.max(0.75, 0.3 * (n || 1));
+  return Math.abs(actual - requested) <= tol;
+}
+
+function safeFilename(name) {
+  return (name || 'reel').replace(/[^a-z0-9 _-]/gi, '').trim().slice(0, 60) || 'reel';
+}
+
+function muxDownloadUrl(playbackId, name) {
+  return 'https://stream.mux.com/' + playbackId + '/' + name;
+}
+
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-// Read the master playlist: pick the highest-RESOLUTION video rendition and the audio rendition (Mux serves them separately).
-async function parseMaster(masterUrl) {
-  const res = await fetch(masterUrl);
-  if (!res.ok) throw new Error('Could not read the stream playlist (' + res.status + ')');
-  const lines = (await res.text()).split(/\r?\n/);
-  const audios = {}; let firstAudio = null;
-  let best = null, bestScore = -1, bestAudioGroup = null;
-  for (let i = 0; i < lines.length; i++) {
-    const ln = lines[i].trim();
-    if (ln.startsWith('#EXT-X-MEDIA') && /TYPE=AUDIO/.test(ln)) {
-      const g = (ln.match(/GROUP-ID="([^"]+)"/) || [])[1];
-      const u = (ln.match(/URI="([^"]+)"/) || [])[1];
-      if (u) { if (g) audios[g] = u; if (!firstAudio) firstAudio = u; }
-    } else if (ln.startsWith('#EXT-X-STREAM-INF')) {
-      const rm = ln.match(/RESOLUTION=(\d+)x(\d+)/);
-      const area = rm ? parseInt(rm[1], 10) * parseInt(rm[2], 10) : 0;
-      const bw = parseInt((ln.match(/BANDWIDTH=(\d+)/) || [])[1] || '0', 10);
-      const score = area * 1e9 + bw; // resolution dominates; bandwidth breaks ties
-      const ag = (ln.match(/AUDIO="([^"]+)"/) || [])[1] || null;
-      let j = i + 1; while (j < lines.length && (!lines[j].trim() || lines[j].trim().startsWith('#'))) j++;
-      const uri = lines[j] ? lines[j].trim() : null;
-      if (uri && score > bestScore) { bestScore = score; best = uri; bestAudioGroup = ag; }
-    }
-  }
-  if (!best) return { videoUrl: masterUrl, audioUrl: null }; // already a media playlist (audio likely muxed)
-  const videoUrl = new URL(best, masterUrl).toString();
-  const aRel = (bestAudioGroup && audios[bestAudioGroup]) || firstAudio;
-  return { videoUrl: videoUrl, audioUrl: aRel ? new URL(aRel, masterUrl).toString() : null };
+// Best-effort: delete the Mux clip asset so we don't accrue storage.
+function deleteClipAsset(job) {
+  if (!job || !job.clipAssetId) return;
+  const id = job.clipAssetId;
+  job.clipAssetId = null;
+  muxFetch('/video/v1/assets/' + id, { method: 'DELETE' }).catch(function () { /* best effort */ });
 }
 
-// Download every segment of a media playlist into one local file (Node does the network, not FFmpeg).
-async function downloadPlaylist(playlistUrl, destFile) {
-  const r0 = await fetch(playlistUrl);
-  if (!r0.ok) throw new Error('Could not read a stream playlist (' + r0.status + ')');
-  const lines = (await r0.text()).split(/\r?\n/);
-  let initUri = null; const segs = [];
-  for (const raw of lines) {
-    const ln = raw.trim();
-    if (ln.startsWith('#EXT-X-MAP')) { const m = ln.match(/URI="([^"]+)"/); if (m) initUri = m[1]; }
-    else if (ln && !ln.startsWith('#')) segs.push(ln);
-  }
-  if (!segs.length) throw new Error('No segments found in a stream playlist');
-  if (fs.existsSync(destFile)) fs.unlinkSync(destFile);
-  async function append(u) {
-    const r = await fetch(u);
-    if (!r.ok) throw new Error('A stream segment failed to download (' + r.status + ')');
-    await fs.promises.appendFile(destFile, Buffer.from(await r.arrayBuffer()));
-  }
-  if (initUri) await append(new URL(initUri, playlistUrl).toString());
-  for (const s of segs) await append(new URL(s, playlistUrl).toString());
-}
-
-async function processCut(jobId, playbackId, clips) {
+// The work: create the clip+concat asset on Mux, then poll until both the asset and
+// its downloadable MP4 are ready. All heavy lifting is on Mux's side.
+async function processCutViaMux(jobId, masterAssetId, clips, filmName) {
   const job = cuts.get(jobId); if (!job) return;
-  let videoFile = null, audioFile = null;
-  const outFile = path.join(os.tmpdir(), 'mr-reel-' + jobId + '.mp4');
+  job.inputsSent = clips.length;
+  job.requestedSeconds = round2(sumSeconds(clips));
   try {
-    if (!ffmpegPath) throw new Error('FFmpeg is not available on the server');
-    // 1) find the top rendition + its audio, then pull both down locally
-    job.status = 'processing'; job.phase = 'downloading';
-    const { videoUrl, audioUrl } = await parseMaster('https://stream.mux.com/' + playbackId + '.m3u8');
-    videoFile = path.join(os.tmpdir(), 'mr-vid-' + jobId + '.ts');
-    await downloadPlaylist(videoUrl, videoFile);
-    if (audioUrl) {
-      audioFile = path.join(os.tmpdir(), 'mr-aud-' + jobId + '.ts');
-      await downloadPlaylist(audioUrl, audioFile);
+    job.status = 'processing'; job.phase = 'creating';
+    const clip = await muxFetch('/video/v1/assets', {
+      method: 'POST',
+      body: {
+        inputs: buildClipInputs(masterAssetId, clips),
+        playback_policies: ['public'],
+        video_quality: 'basic',
+        static_renditions: [{ resolution: 'highest' }]
+      }
+    });
+    job.clipAssetId = clip.id;
+    job.clipPlaybackId = (clip.playback_ids && clip.playback_ids[0] && clip.playback_ids[0].id) || null;
+    job.assetStatus = clip.status || 'preparing';
+    job.phase = 'transcoding';
+
+    const deadline = Date.now() + CUT_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      await sleep(POLL_MS);
+      let a;
+      try { a = await muxFetch('/video/v1/assets/' + clip.id); }
+      catch (e) { continue; /* transient read error — keep polling */ }
+      job.assetStatus = a.status;
+      if (typeof a.duration === 'number') job.actualSeconds = round2(a.duration);
+
+      const mp4 = pickReadyMp4(a.static_renditions);
+      job.mp4 = mp4 ? { name: mp4.name, status: mp4.status } : summarizeSR(a.static_renditions);
+
+      if (a.status === 'errored') throw new Error('Mux could not build the cut (asset errored).');
+      if (a.status === 'ready' && mp4) {
+        job.mp4Name = mp4.name;
+        job.phase = 'ready'; job.status = 'ready';
+        return;
+      }
     }
-    // 2) cut + concatenate (video + audio) into one clean MP4
-    job.phase = 'rendering';
-    await runFfmpeg(buildCutArgs(videoFile, audioFile, clips, outFile));
-    job.file = outFile; job.status = 'ready'; job.phase = 'ready';
+    throw new Error('Timed out waiting for Mux to finish the cut.');
   } catch (e) {
     job.status = 'error'; job.phase = 'error'; job.error = e.message;
-  } finally {
-    try { if (videoFile && fs.existsSync(videoFile)) fs.unlinkSync(videoFile); } catch (e) {}
-    try { if (audioFile && fs.existsSync(audioFile)) fs.unlinkSync(audioFile); } catch (e) {}
+    deleteClipAsset(job); // clean up any partial asset
   }
 }
 
@@ -317,38 +338,92 @@ app.post('/api/sends/:id/cut', async (req, res) => {
     const q = await pool.query('SELECT * FROM reel_sends WHERE id = $1', [req.params.id]);
     if (!q.rows.length) return res.status(404).json({ error: 'Not found' });
     const row = q.rows[0];
-    if (!row.playback_id || row.status !== 'ready') return res.status(409).json({ error: 'This film isn\u2019t ready yet.' });
+    if (row.status !== 'ready') return res.status(409).json({ error: 'This film isn\u2019t ready yet.' });
+    if (!row.asset_id) return res.status(409).json({ error: 'This film has no master asset to cut from yet.' });
     const clips = sanitizeClips(req.body && req.body.clips, row.duration);
-    if (!clips) return res.status(400).json({ error: 'No valid clips were provided.' });
-    const total = clips.reduce(function (a, c) { return a + (c[1] - c[0]); }, 0);
+    if (!clips) return res.status(400).json({ error: 'No valid selections — each must be at least 0.5 seconds.' });
+    const total = sumSeconds(clips);
     if (total > MAX_CUT_SECONDS) return res.status(400).json({ error: 'That selection is too long.' });
     const jobId = crypto.randomUUID();
     cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: row.film_name, createdAt: Date.now() });
     res.json({ jobId: jobId });
-    processCut(jobId, row.playback_id, clips); // run in the background
+    processCutViaMux(jobId, row.asset_id, clips, row.film_name); // run in the background
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Poll a cut job's progress.
+// Poll a cut job's progress — includes a verification RECEIPT so we can confirm
+// Mux really concatenated the ranges (requested vs actual duration) and that the
+// downloadable MP4 was produced.
 app.get('/api/cuts/:jobId', (req, res) => {
   const job = cuts.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: 'Not found' });
-  res.json({ status: job.status, phase: job.phase, error: job.error || null });
-});
-
-// Download the finished reel (single-use; the temp file is cleaned up after sending).
-app.get('/api/cuts/:jobId/download', (req, res) => {
-  const job = cuts.get(req.params.jobId);
-  if (!job || job.status !== 'ready' || !job.file || !fs.existsSync(job.file)) return res.status(404).json({ error: 'Not ready' });
-  const safe = (job.filmName || 'reel').replace(/[^a-z0-9 _-]/gi, '').trim().slice(0, 60) || 'reel';
-  res.download(job.file, safe + ' - reel.mp4', function () {
-    try { if (fs.existsSync(job.file)) fs.unlinkSync(job.file); } catch (e) {}
-    cuts.delete(req.params.jobId);
+  res.json({
+    status: job.status,
+    phase: job.phase,
+    error: job.error || null,
+    receipt: {
+      inputsSent: job.inputsSent != null ? job.inputsSent : null,
+      requestedSeconds: job.requestedSeconds != null ? job.requestedSeconds : null,
+      actualSeconds: typeof job.actualSeconds === 'number' ? job.actualSeconds : null,
+      concatLooksCorrect: concatLooksCorrect(job.requestedSeconds, job.actualSeconds, job.inputsSent),
+      assetStatus: job.assetStatus || null,
+      clipAssetId: job.clipAssetId || null,
+      clipPlaybackId: job.clipPlaybackId || null,
+      mp4: job.mp4 || null,
+      downloadReady: job.status === 'ready'
+    }
   });
 });
 
-if (pool) ensureSchema().then(() => console.log('reel_sends table ready')).catch(e => console.error('schema error:', e.message));
+// Download the finished reel. We stream Mux's MP4 straight through (no buffering,
+// no processing), set a clean filename, keep the Mux URL private, and delete the
+// clip asset once the download completes.
+app.get('/api/cuts/:jobId/download', async (req, res) => {
+  const job = cuts.get(req.params.jobId);
+  if (!job || job.status !== 'ready' || !job.clipPlaybackId || !job.mp4Name) {
+    return res.status(404).json({ error: 'Not ready' });
+  }
+  try {
+    const r = await fetch(muxDownloadUrl(job.clipPlaybackId, job.mp4Name));
+    if (!r.ok || !r.body) {
+      return res.status(502).json({ error: 'Could not fetch the finished cut from Mux (' + r.status + ').' });
+    }
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', 'attachment; filename="' + safeFilename(job.filmName) + ' - reel.mp4"');
+    const len = r.headers.get('content-length'); if (len) res.setHeader('Content-Length', len);
 
-app.listen(PORT, () => console.log('Magic Reel engine listening on ' + PORT));
+    const stream = Readable.fromWeb(r.body);
+    stream.on('error', function () { try { res.destroy(); } catch (e) {} });
+    // 'finish' = the response was fully sent -> safe to delete the asset + job.
+    res.on('finish', function () { deleteClipAsset(job); cuts.delete(req.params.jobId); });
+    stream.pipe(res);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Sweep abandoned cut jobs (never downloaded) so their Mux assets don't linger.
+function sweepStaleCuts() {
+  const now = Date.now();
+  for (const [id, job] of cuts) {
+    if (now - (job.createdAt || now) > 60 * 60 * 1000) {
+      deleteClipAsset(job);
+      cuts.delete(id);
+    }
+  }
+}
+
+// Exposed for logic tests (see test_helpers.js).
+module.exports = {
+  sanitizeClips, sumSeconds, buildClipInputs, pickReadyMp4, summarizeSR,
+  concatLooksCorrect, safeFilename, muxDownloadUrl, round2,
+  MIN_CLIP_SECONDS, MAX_CUT_SECONDS, APP_VERSION
+};
+
+if (require.main === module) {
+  if (pool) ensureSchema().then(() => console.log('reel_sends table ready')).catch(e => console.error('schema error:', e.message));
+  setInterval(sweepStaleCuts, 10 * 60 * 1000).unref();
+  app.listen(PORT, () => console.log('Magic Reel engine ' + APP_VERSION + ' listening on ' + PORT));
+}

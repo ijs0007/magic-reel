@@ -1,8 +1,8 @@
 {
   "name": "magic-reel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Magic Reel — share film footage so cast & crew build their own reels.",
+  "description": "Magic Reel — share film footage so cast & crew build their own reels. Clean cuts are clipped + concatenated on Mux; the server only relays the finished MP4 (no local encoding).",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "pg": "^8.11.3",
-    "ffmpeg-static": "^5.2.0"
+    "pg": "^8.11.3"
   }
 }
