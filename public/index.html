@@ -50,6 +50,15 @@
 
   .filecard{display:none;align-items:center;gap:14px;padding:13px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
   .filecard.show{display:flex}
+  .up-status{margin-top:13px;font-size:13px;color:var(--text-soft);display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  .up-status b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+  .up-status .barwrap{flex:1;height:7px;border-radius:5px;background:var(--pick-bg);overflow:hidden;min-width:120px;max-width:240px}
+  .up-status .barwrap .bf{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--t1),var(--t2));transition:width .2s}
+  .up-status.ready{color:var(--good)} .up-status.ready b{color:var(--good)}
+  .up-status.err{color:var(--err)}
+  .up-preview{margin-top:13px}
+  .up-preview iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:11px;display:block;background:#000}
+  .up-preview .cap{font-size:11.5px;color:var(--text-soft);margin-top:8px}
   .thumb{width:78px;height:46px;border-radius:7px;flex:0 0 auto;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;position:relative}
   .thumb img{width:100%;height:100%;object-fit:cover;display:block}
   .thumb .ph svg{width:20px;height:20px;opacity:.7}
@@ -221,6 +230,8 @@
       <div class="fileinfo"><div class="name" id="fname">&mdash;</div><div class="meta" id="fmeta">&mdash;</div></div>
       <button class="xbtn" id="fremove" aria-label="Remove file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>
+    <div id="upStatus" class="up-status hidden"></div>
+    <div id="upPreview" class="up-preview hidden"></div>
   </div>
 
   <!-- STEP 2 -->
@@ -363,8 +374,50 @@
       v.addEventListener('error',function(){try{URL.revokeObjectURL(url);}catch(e){}});
     }catch(e){}
     refresh();
+    startUpload(file);
   }
-  function clearFile(){state.file=null;filecard.classList.remove('show');drop.style.display='';filein.value='';refresh();}
+
+  // --- Milestone 2: real upload to Mux + transcode status ---
+  var upStatus=$('upStatus'), upPreview=$('upPreview');
+  function renderUp(html, cls){ upStatus.className='up-status'+(cls?' '+cls:''); upStatus.innerHTML=html; upStatus.classList.remove('hidden'); }
+  function startUpload(file){
+    state.sendId=null; state.playbackId=null;
+    upPreview.classList.add('hidden'); upPreview.innerHTML='';
+    renderUp('Preparing upload\u2026');
+    fetch('/api/uploads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filmName:file.name})})
+      .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+      .then(function(res){
+        if(!res.ok){ renderUp('Couldn\u2019t start the upload: '+(res.j.error||'error'),'err'); return; }
+        state.sendId=res.j.sendId;
+        var xhr=new XMLHttpRequest(); state.uploadXhr=xhr;
+        xhr.open('PUT',res.j.uploadUrl,true);
+        xhr.upload.onprogress=function(e){ if(e.lengthComputable){ var p=Math.round(e.loaded/e.total*100); renderUp('Uploading to Mux <b>'+p+'%</b><span class="barwrap"><span class="bf" style="width:'+p+'%"></span></span>'); } };
+        xhr.onload=function(){ if(xhr.status>=200&&xhr.status<300){ renderUp('Uploaded \u00b7 transcoding<span class="barwrap"><span class="bf" style="width:100%"></span></span>'); pollStatus(state.sendId); } else { renderUp('Upload failed (HTTP '+xhr.status+').','err'); } };
+        xhr.onerror=function(){ renderUp('Upload failed \u2014 network error.','err'); };
+        xhr.send(file);
+      })
+      .catch(function(){ renderUp('Couldn\u2019t reach the server.','err'); });
+  }
+  function pollStatus(sendId){
+    clearTimeout(state.pollTimer);
+    fetch('/api/sends/'+sendId+'/status').then(function(r){return r.json();}).then(function(j){
+      if(sendId!==state.sendId) return; // a newer file replaced this one
+      if(j.status==='ready'){ state.playbackId=j.playbackId; renderUp('Transcoded and ready','ready'); showPreview(j.playbackId); }
+      else if(j.status==='error'){ renderUp('Mux couldn\u2019t process this file.','err'); }
+      else { renderUp('Transcoding\u2026 this can take a moment<span class="barwrap"><span class="bf" style="width:100%"></span></span>'); state.pollTimer=setTimeout(function(){pollStatus(sendId);},3000); }
+    }).catch(function(){ state.pollTimer=setTimeout(function(){pollStatus(sendId);},4000); });
+  }
+  function showPreview(pid){
+    if(!pid) return;
+    upPreview.innerHTML='<iframe src="https://player.mux.com/'+pid+'?max_resolution=480p" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe><div class="cap">Your film, transcoded and streaming from Mux (preview capped at 480p).</div>';
+    upPreview.classList.remove('hidden');
+  }
+  function clearFile(){
+    if(state.uploadXhr){try{state.uploadXhr.abort();}catch(e){}state.uploadXhr=null;}
+    clearTimeout(state.pollTimer); state.sendId=null; state.playbackId=null;
+    upStatus.classList.add('hidden'); upStatus.innerHTML=''; upPreview.classList.add('hidden'); upPreview.innerHTML='';
+    state.file=null;filecard.classList.remove('show');drop.style.display='';filein.value='';refresh();
+  }
   drop.addEventListener('click',function(){filein.click();});
   drop.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();filein.click();}});
   filein.addEventListener('change',function(e){if(e.target.files&&e.target.files[0])handleFile(e.target.files[0]);});
