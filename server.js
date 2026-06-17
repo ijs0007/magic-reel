@@ -210,7 +210,7 @@ function buildCutArgs(input, clips, output) {
     cat += '[v' + i + '][a' + i + ']';
   });
   const filter = parts.join(';') + ';' + cat + 'concat=n=' + clips.length + ':v=1:a=1[outv][outa]';
-  return ['-y', '-i', input, '-filter_complex', filter, '-map', '[outv]', '-map', '[outa]',
+  return ['-hide_banner', '-y', '-i', input, '-filter_complex', filter, '-map', '[outv]', '-map', '[outa]',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', output];
 }
 
@@ -246,18 +246,48 @@ async function highestVariantUrl(masterUrl) {
   } catch (e) { return masterUrl; }
 }
 
+// Download the top rendition's segments to one local file (Node does the network, not FFmpeg).
+async function downloadRendition(playbackId, jobId) {
+  const variantUrl = await highestVariantUrl('https://stream.mux.com/' + playbackId + '.m3u8');
+  const r0 = await fetch(variantUrl);
+  if (!r0.ok) throw new Error('Could not read the stream playlist (' + r0.status + ')');
+  const lines = (await r0.text()).split(/\r?\n/);
+  let initUri = null; const segs = [];
+  for (const raw of lines) {
+    const ln = raw.trim();
+    if (ln.startsWith('#EXT-X-MAP')) { const m = ln.match(/URI="([^"]+)"/); if (m) initUri = m[1]; }
+    else if (ln && !ln.startsWith('#')) segs.push(ln);
+  }
+  if (!segs.length) throw new Error('No video segments found in the stream');
+  const dest = path.join(os.tmpdir(), 'mr-src-' + jobId + (initUri ? '.mp4' : '.ts'));
+  if (fs.existsSync(dest)) fs.unlinkSync(dest);
+  async function append(u) {
+    const r = await fetch(u);
+    if (!r.ok) throw new Error('A stream segment failed to download (' + r.status + ')');
+    await fs.promises.appendFile(dest, Buffer.from(await r.arrayBuffer()));
+  }
+  if (initUri) await append(new URL(initUri, variantUrl).toString());
+  for (const s of segs) await append(new URL(s, variantUrl).toString());
+  return dest;
+}
+
 async function processCut(jobId, playbackId, clips) {
   const job = cuts.get(jobId); if (!job) return;
+  let srcFile = null;
   const outFile = path.join(os.tmpdir(), 'mr-reel-' + jobId + '.mp4');
   try {
     if (!ffmpegPath) throw new Error('FFmpeg is not available on the server');
-    job.status = 'processing'; job.phase = 'rendering';
-    // Cut straight from the clean HLS stream (no watermark, no master preparation) at top rendition.
-    const src = await highestVariantUrl('https://stream.mux.com/' + playbackId + '.m3u8');
-    await runFfmpeg(buildCutArgs(src, clips, outFile));
+    // 1) pull the clean stream's top rendition down to a local file
+    job.status = 'processing'; job.phase = 'downloading';
+    srcFile = await downloadRendition(playbackId, jobId);
+    // 2) cut + concatenate the local file into one clean MP4
+    job.phase = 'rendering';
+    await runFfmpeg(buildCutArgs(srcFile, clips, outFile));
     job.file = outFile; job.status = 'ready'; job.phase = 'ready';
   } catch (e) {
     job.status = 'error'; job.phase = 'error'; job.error = e.message;
+  } finally {
+    try { if (srcFile && fs.existsSync(srcFile)) fs.unlinkSync(srcFile); } catch (e) {}
   }
 }
 

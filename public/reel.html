@@ -215,7 +215,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.6.2 &mdash; &#9986;&#65039; Clean cut: instant, straight from the stream</footer>
+  <footer class="ver">Magic Reel &middot; v0.6.3 &mdash; &#9986;&#65039; Clean cut: server-side stream fetch + cut</footer>
 </div>
 
 <div class="bar">
@@ -330,7 +330,7 @@
   }
 
   var dlScrim=$('dlScrim'),dlModal=$('dlModal'),cutPoll=null;
-  var PHASE_TXT={queued:'Queued\u2026',preparing:'Preparing your footage\u2026',downloading:'Fetching the master\u2026',rendering:'Rendering your clean cut\u2026'};
+  var PHASE_TXT={queued:'Queued\u2026',preparing:'Preparing your footage\u2026',downloading:'Fetching your footage\u2026',rendering:'Rendering your clean cut\u2026'};
   function renderProc(phase){
     var txt=PHASE_TXT[phase]||'Working\u2026';
     dlModal.innerHTML='<h3>Building your reel</h3><p class="lede">Your clean, watermark-free cut is being made from the master \u2014 this can take a moment.</p><div class="pipe"><div class="pl active"><span class="dot"><span class="spin"></span></span>'+txt+'</div></div>';
