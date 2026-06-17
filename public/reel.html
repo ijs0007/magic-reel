@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mux/mux-video" defer></script>
 <style>
   :root{
     --bg:#faf9f5; --surface:#ffffff; --text:#1a1a18; --text-soft:#6b6a64;
@@ -44,6 +45,10 @@
 
   .stage{position:relative;background:#000;aspect-ratio:16/9;width:100%;overflow:hidden}
   .stage canvas{display:block;width:100%;height:100%}
+  .stage mux-video{display:block;width:100%;height:100%;background:#000;--media-object-fit:contain}
+  .stagemsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:#000;z-index:3}
+  .stagemsg .sm-in{max-width:300px;line-height:1.5;color:#cfcfcf;font-size:13.5px}
+  .stagemsg .spin2{width:18px;height:18px;border:2px solid rgba(255,255,255,.4);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 11px}
   .wm{position:absolute;inset:0;pointer-events:none}
   .pbig{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.18);cursor:pointer;transition:opacity .2s}
   .pbig.hide{opacity:0;pointer-events:none}
@@ -168,10 +173,11 @@
 
   <div class="card">
     <div class="stage" id="stage">
-      <canvas id="cv" width="640" height="360"></canvas>
+      <mux-video id="player" stream-type="on-demand" max-resolution="480p" playsinline></mux-video>
       <div class="wm" id="wm"></div>
       <div class="lowres">PREVIEW &middot; watermarked &middot; low-res</div>
       <div class="pbig" id="pbig"><div class="circ"><svg viewBox="0 0 24 24" fill="#111"><polygon points="6 4 20 12 6 20 6 4"/></svg></div></div>
+      <div class="stagemsg" id="stageMsg" style="display:none"></div>
     </div>
     <div class="transport">
       <button class="pp" id="pp" aria-label="Play"><svg id="ppIco" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
@@ -231,57 +237,52 @@
 
   var st={t:0,playing:false,markIn:null,markOut:null,segments:[]};
 
-  (function(){var label='MAGIC REEL \u00b7 '+CTX.name.toUpperCase();var svg='<svg xmlns="http://www.w3.org/2000/svg" width="260" height="150"><text x="6" y="78" font-family="Poppins, Arial, sans-serif" font-size="12" font-weight="600" fill="rgba(255,255,255,0.16)" transform="rotate(-26 130 75)">'+label+'</text></svg>';$('wm').style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';$('wm').style.backgroundRepeat='repeat';})();
+  (function(){var label='MAGIC REEL \u00b7 PREVIEW';var svg='<svg xmlns="http://www.w3.org/2000/svg" width="260" height="150"><text x="6" y="78" font-family="Poppins, Arial, sans-serif" font-size="12" font-weight="600" fill="rgba(255,255,255,0.16)" transform="rotate(-26 130 75)">'+label+'</text></svg>';$('wm').style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';$('wm').style.backgroundRepeat='repeat';})();
 
-  $('grName').textContent=CTX.name.split(' ')[0];
+  $('grName').textContent='there';
   $('grSender').textContent=CTX.sender;
   $('grFilm').textContent=CTX.film;
   $('grCap').textContent=CTX.sender.split(' ')[0]+' set your reel length to '+fmt(CTX.budget);
-  $('grAva').textContent=CTX.name.split(' ').slice(0,2).map(function(w){return w[0];}).join('').toUpperCase();
+  $('grAva').textContent='\u2726';
   $('tot').textContent='/ '+fmt(CTX.duration);
 
-  var cv=$('cv'),ctx=cv.getContext('2d'),CW=cv.width,CH=cv.height;
-  var PHASES=[
-    {sky:['#1b2a4a','#33507e'],sea:'#16243f',sun:'#cdd7ea',sunY:.34},
-    {sky:['#4a6aa5','#e8a36a'],sea:'#3a5478',sun:'#ffe2b0',sunY:.5},
-    {sky:['#7db6e6','#cfe8fb'],sea:'#4d7fae',sun:'#fff6d8',sunY:.28},
-    {sky:['#e7a86a','#9c5b8e'],sea:'#5b4a6e',sun:'#ffd9a0',sunY:.6},
-    {sky:['#101a33','#2a2150'],sea:'#0d1428',sun:'#e8ecff',sunY:.3}
-  ];
-  function lerp(a,b,t){return a+(b-a)*t;}
-  function hexMix(h1,h2,t){function p(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}var a=p(h1),b=p(h2);return 'rgb('+Math.round(lerp(a[0],b[0],t))+','+Math.round(lerp(a[1],b[1],t))+','+Math.round(lerp(a[2],b[2],t))+')';}
-  function drawScene(t){
-    var prog=t/CTX.duration,fp=prog*(PHASES.length-1),i=Math.min(PHASES.length-2,Math.floor(fp)),f=fp-i,A=PHASES[i],B=PHASES[i+1];
-    var g=ctx.createLinearGradient(0,0,0,CH);g.addColorStop(0,hexMix(A.sky[0],B.sky[0],f));g.addColorStop(1,hexMix(A.sky[1],B.sky[1],f));ctx.fillStyle=g;ctx.fillRect(0,0,CW,CH);
-    var sunY=lerp(A.sunY,B.sunY,f)*CH*0.7,sunX=CW*(0.2+0.6*prog);
-    ctx.beginPath();ctx.arc(sunX,sunY,26,0,Math.PI*2);ctx.fillStyle=hexMix(A.sun,B.sun,f);ctx.globalAlpha=.9;ctx.fill();ctx.globalAlpha=1;
-    var seaTop=CH*0.62;ctx.fillStyle=hexMix(A.sea,B.sea,f);ctx.fillRect(0,seaTop,CW,CH-seaTop);
-    ctx.strokeStyle='rgba(255,255,255,0.10)';ctx.lineWidth=1;
-    for(var y=seaTop+8;y<CH;y+=10){ctx.beginPath();for(var x=0;x<=CW;x+=8){var yy=y+Math.sin((x*0.05)+(t*1.6)+(y))*1.4;if(x===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);}ctx.stroke();}
-    var lx=CW*0.82;ctx.fillStyle='rgba(10,12,20,0.92)';
-    ctx.beginPath();ctx.moveTo(lx-13,seaTop);ctx.lineTo(lx-8,seaTop-70);ctx.lineTo(lx+8,seaTop-70);ctx.lineTo(lx+13,seaTop);ctx.closePath();ctx.fill();
-    ctx.fillRect(lx-11,seaTop-86,22,18);
-    var beam=(t*0.9)%(Math.PI*2),bx=Math.cos(beam);
-    if(bx<0){ctx.save();ctx.translate(lx,seaTop-77);var grad=ctx.createLinearGradient(0,0,bx*240,Math.sin(beam)*60);grad.addColorStop(0,'rgba(255,245,200,0.34)');grad.addColorStop(1,'rgba(255,245,200,0)');ctx.fillStyle=grad;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(bx*260,Math.sin(beam)*70-30);ctx.lineTo(bx*260,Math.sin(beam)*70+30);ctx.closePath();ctx.fill();ctx.restore();}
-    ctx.font='600 15px Poppins, Arial, sans-serif';var tc=fmt(t);ctx.textAlign='right';
-    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(tc,CW-13,CH-15);ctx.fillStyle='rgba(255,255,255,0.9)';ctx.fillText(tc,CW-14,CH-16);ctx.textAlign='left';
-  }
+  // --- real player (Mux), wired to the same marking + budget UI ---
+  var player=$('player');
 
-  var last=0;
-  function tick(ts){if(!st.playing)return;if(!last)last=ts;var dt=(ts-last)/1000;last=ts;st.t+=dt;if(st.t>=CTX.duration){st.t=CTX.duration;setPlaying(false);}render();if(st.playing)requestAnimationFrame(tick);}
-  function setPlaying(p){st.playing=p;last=0;$('pbig').classList.toggle('hide',p);$('ppIco').innerHTML=p?'<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>':'<polygon points="6 4 20 12 6 20 6 4"/>';$('pp').setAttribute('aria-label',p?'Pause':'Play');if(p)requestAnimationFrame(tick);}
+  function setPpIcon(p){ $('ppIco').innerHTML=p?'<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>':'<polygon points="6 4 20 12 6 20 6 4"/>'; $('pp').setAttribute('aria-label',p?'Pause':'Play'); $('pbig').classList.toggle('hide',p); }
+  function setPlaying(p){ try{ if(p) player.play(); else player.pause(); }catch(e){} }
+  player.addEventListener('play',function(){st.playing=true;setPpIcon(true);});
+  player.addEventListener('pause',function(){st.playing=false;setPpIcon(false);});
+  player.addEventListener('ended',function(){st.playing=false;setPpIcon(false);});
+  player.addEventListener('timeupdate',render);
+  player.addEventListener('seeking',render);
+  player.addEventListener('loadedmetadata',function(){ if(player.duration&&isFinite(player.duration)){ CTX.duration=player.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } });
   $('pp').addEventListener('click',function(){setPlaying(!st.playing);});
   $('pbig').addEventListener('click',function(){setPlaying(true);});
 
-  function pct(t){return t/CTX.duration*100;}
-  function render(){drawScene(st.t);$('cur').textContent=fmt(st.t);$('ph').style.left=pct(st.t)+'%';}
+  function pct(t){return CTX.duration>0?(t/CTX.duration*100):0;}
+  function render(){var t=player.currentTime||0;$('cur').textContent=fmt(t);$('ph').style.left=pct(t)+'%';}
 
   var tl=$('tl'),scrubbing=false;
-  function seekFromX(cx){var r=tl.getBoundingClientRect();var p=Math.min(1,Math.max(0,(cx-r.left)/r.width));st.t=p*CTX.duration;render();}
-  tl.addEventListener('pointerdown',function(e){scrubbing=true;tl.setPointerCapture(e.pointerId);if(st.playing)setPlaying(false);seekFromX(e.clientX);});
+  function seekFromX(cx){if(!(CTX.duration>0))return;var r=tl.getBoundingClientRect();var p=Math.min(1,Math.max(0,(cx-r.left)/r.width));try{player.currentTime=p*CTX.duration;}catch(e){}render();}
+  tl.addEventListener('pointerdown',function(e){scrubbing=true;tl.setPointerCapture(e.pointerId);seekFromX(e.clientX);});
   tl.addEventListener('pointermove',function(e){if(scrubbing)seekFromX(e.clientX);});
   tl.addEventListener('pointerup',function(){scrubbing=false;});
   tl.addEventListener('pointercancel',function(){scrubbing=false;});
+
+  // --- load the most recent uploaded film ---
+  var stageMsg=$('stageMsg');
+  function showMsg(txt,spin){ stageMsg.innerHTML='<div class="sm-in">'+(spin?'<div class="spin2"></div>':'')+'<span>'+txt+'</span></div>'; stageMsg.style.display='flex'; }
+  function hideMsg(){ stageMsg.style.display='none'; }
+  function loadFilm(j){ CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } player.setAttribute('playback-id', j.playbackId); hideMsg(); }
+  var loadPoll=null;
+  function checkSend(id){ fetch('/api/sends/'+id+'/status').then(function(r){return r.json();}).then(function(j){ if(j.status==='ready'&&j.playbackId){ clearTimeout(loadPoll); loadFilm(j); } else if(j.status==='error'){ clearTimeout(loadPoll); showMsg('This film couldn\u2019t be processed.',false); } else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(function(){checkSend(id);},3000); } }).catch(function(){ loadPoll=setTimeout(function(){checkSend(id);},4000); }); }
+  showMsg('Loading your footage\u2026',true);
+  fetch('/api/sends/latest').then(function(r){return r.json();}).then(function(j){
+    if(!j || j.none){ showMsg('No footage has been uploaded yet. Drop a film on the send screen first.',false); return; }
+    CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film;
+    if(j.status==='ready'&&j.playbackId){ loadFilm(j); } else { checkSend(j.sendId); }
+  }).catch(function(){ showMsg('Couldn\u2019t reach the server.',false); });
 
   function used(){return st.segments.reduce(function(a,s){return a+(s.out-s.in);},0);}
   function remaining(){return CTX.budget-used();}
@@ -301,8 +302,8 @@
     if(len>rem){c.className='candidate warn';c.innerHTML='Clip is <b>'+fmt(len)+'</b> but only <b>'+fmt(rem)+'</b> left \u2014 shorten it or remove a clip.';return;}
     c.className='candidate ready';c.innerHTML='Clip <b>'+fmt(st.markIn)+' \u2192 '+fmt(st.markOut)+'</b> \u00b7 <b>'+fmt(len)+'</b> \u2014 fits your reel.';add.disabled=false;
   }
-  $('markInBtn').addEventListener('click',function(){st.markIn=st.t;if(st.markOut!=null&&st.markOut<=st.markIn)st.markOut=null;updateMarkers();});
-  $('markOutBtn').addEventListener('click',function(){st.markOut=st.t;updateMarkers();});
+  $('markInBtn').addEventListener('click',function(){st.markIn=player.currentTime||0;if(st.markOut!=null&&st.markOut<=st.markIn)st.markOut=null;updateMarkers();});
+  $('markOutBtn').addEventListener('click',function(){st.markOut=player.currentTime||0;updateMarkers();});
   $('addBtn').addEventListener('click',function(){if(st.markIn==null||st.markOut==null||st.markOut<=st.markIn)return;if((st.markOut-st.markIn)>remaining())return;st.segments.push({in:st.markIn,out:st.markOut});st.segments.sort(function(a,b){return a.in-b.in;});st.markIn=null;st.markOut=null;updateMarkers();renderSegments();renderBudget();});
 
   function renderSegments(){
@@ -314,7 +315,7 @@
     st.segments.forEach(function(s,idx){
       var row=document.createElement('div');row.className='segrow';
       row.innerHTML='<div class="ord">'+(idx+1)+'</div><div class="sinfo"><div class="srange">'+fmt(s.in)+' \u2192 '+fmt(s.out)+'</div><div class="sdur">'+fmt(s.out-s.in)+' clip</div></div><button class="play" aria-label="Preview clip"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg></button><button class="rm" aria-label="Remove clip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>';
-      row.querySelector('.play').addEventListener('click',function(){st.t=s.in;render();setPlaying(true);});
+      row.querySelector('.play').addEventListener('click',function(){try{player.currentTime=s.in;}catch(e){}setPlaying(true);});
       row.querySelector('.rm').addEventListener('click',function(){st.segments.splice(idx,1);updateMarkers();renderSegments();renderBudget();});
       list.appendChild(row);
     });

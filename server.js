@@ -110,6 +110,18 @@ app.post('/api/uploads', async (req, res) => {
   }
 });
 
+// Most recent upload (used by the recipient page for testing in this milestone).
+app.get('/api/sends/latest', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const q = await pool.query('SELECT * FROM reel_sends ORDER BY created_at DESC LIMIT 1');
+    if (!q.rows.length) return res.json({ none: true });
+    res.json(publicSend(q.rows[0]));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Poll an upload's progress through Mux: upload -> asset created -> asset ready.
 app.get('/api/sends/:id/status', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
