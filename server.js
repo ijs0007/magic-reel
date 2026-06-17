@@ -218,56 +218,46 @@ function runFfmpeg(args) {
   return new Promise(function (resolve, reject) {
     const proc = spawn(ffmpegPath, args);
     let err = '';
+    const killer = setTimeout(function () { try { proc.kill('SIGKILL'); } catch (e) {} reject(new Error('Render timed out')); }, 8 * 60 * 1000);
     proc.stderr.on('data', function (d) { err += d.toString(); if (err.length > 4000) err = err.slice(-4000); });
-    proc.on('error', reject);
-    proc.on('close', function (code) { code === 0 ? resolve() : reject(new Error('FFmpeg failed: ' + err.slice(-400))); });
+    proc.on('error', function (e) { clearTimeout(killer); reject(e); });
+    proc.on('close', function (code) { clearTimeout(killer); code === 0 ? resolve() : reject(new Error('FFmpeg failed: ' + err.slice(-400))); });
   });
 }
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-async function processCut(jobId, assetId, clips) {
-  const job = cuts.get(jobId); if (!job) return;
-  const masterFile = path.join(os.tmpdir(), 'mr-master-' + jobId + '.mp4');
-  const outFile = path.join(os.tmpdir(), 'mr-reel-' + jobId + '.mp4');
+// Read the master playlist and return the highest-bitrate rendition's URL (top quality).
+async function highestVariantUrl(masterUrl) {
   try {
-    job.status = 'processing'; job.phase = 'preparing';
-    // 1) check current master state; only request access if it isn't already available
-    let url = null;
-    const asset = await muxFetch('/video/v1/assets/' + assetId);
-    if (asset.master && asset.master.status === 'ready' && asset.master.url) {
-      url = asset.master.url; // already prepared (e.g. by a previous attempt) — reuse it
-    } else {
-      // request temporary master access; ignore an "already exists" error from a prior request
-      try {
-        await muxFetch('/video/v1/assets/' + assetId + '/master-access', { method: 'PUT', body: { master_access: 'temporary' } });
-      } catch (e) { /* already requested/preparing — fall through to polling */ }
-      // 2) poll until the master URL is ready (master prep can take a few minutes)
-      for (let i = 0; i < 180; i++) {
-        const a = await muxFetch('/video/v1/assets/' + assetId);
-        if (a.master && a.master.status === 'ready' && a.master.url) { url = a.master.url; break; }
-        if (a.master && a.master.status === 'errored') throw new Error('Master preparation failed');
-        await sleep(4000);
+    const res = await fetch(masterUrl);
+    if (!res.ok) return masterUrl;
+    const lines = (await res.text()).split(/\r?\n/);
+    let best = null, bestBw = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i].trim();
+      if (ln.startsWith('#EXT-X-STREAM-INF')) {
+        const m = ln.match(/BANDWIDTH=(\d+)/); const bw = m ? parseInt(m[1], 10) : 0;
+        let j = i + 1; while (j < lines.length && (!lines[j].trim() || lines[j].trim().startsWith('#'))) j++;
+        const uri = lines[j] ? lines[j].trim() : null;
+        if (uri && bw > bestBw) { bestBw = bw; best = uri; }
       }
     }
-    if (!url) throw new Error('Timed out preparing the master file');
-    // 3) stream the master to a temp file (handles large originals without buffering in memory)
-    job.phase = 'downloading';
-    const r = await fetch(url);
-    if (!r.ok || !r.body) throw new Error('Could not download master (' + r.status + ')');
-    await new Promise(function (resolve, reject) {
-      const ws = fs.createWriteStream(masterFile);
-      Readable.fromWeb(r.body).pipe(ws);
-      ws.on('finish', resolve); ws.on('error', reject);
-    });
-    // 4) cut + concatenate into one clean MP4
-    job.phase = 'rendering';
+    return best ? new URL(best, masterUrl).toString() : masterUrl;
+  } catch (e) { return masterUrl; }
+}
+
+async function processCut(jobId, playbackId, clips) {
+  const job = cuts.get(jobId); if (!job) return;
+  const outFile = path.join(os.tmpdir(), 'mr-reel-' + jobId + '.mp4');
+  try {
     if (!ffmpegPath) throw new Error('FFmpeg is not available on the server');
-    await runFfmpeg(buildCutArgs(masterFile, clips, outFile));
+    job.status = 'processing'; job.phase = 'rendering';
+    // Cut straight from the clean HLS stream (no watermark, no master preparation) at top rendition.
+    const src = await highestVariantUrl('https://stream.mux.com/' + playbackId + '.m3u8');
+    await runFfmpeg(buildCutArgs(src, clips, outFile));
     job.file = outFile; job.status = 'ready'; job.phase = 'ready';
   } catch (e) {
     job.status = 'error'; job.phase = 'error'; job.error = e.message;
-  } finally {
-    try { if (fs.existsSync(masterFile)) fs.unlinkSync(masterFile); } catch (e) {}
   }
 }
 
@@ -279,7 +269,7 @@ app.post('/api/sends/:id/cut', async (req, res) => {
     const q = await pool.query('SELECT * FROM reel_sends WHERE id = $1', [req.params.id]);
     if (!q.rows.length) return res.status(404).json({ error: 'Not found' });
     const row = q.rows[0];
-    if (!row.asset_id || row.status !== 'ready') return res.status(409).json({ error: 'This film isn\u2019t ready yet.' });
+    if (!row.playback_id || row.status !== 'ready') return res.status(409).json({ error: 'This film isn\u2019t ready yet.' });
     const clips = sanitizeClips(req.body && req.body.clips, row.duration);
     if (!clips) return res.status(400).json({ error: 'No valid clips were provided.' });
     const total = clips.reduce(function (a, c) { return a + (c[1] - c[0]); }, 0);
@@ -287,7 +277,7 @@ app.post('/api/sends/:id/cut', async (req, res) => {
     const jobId = crypto.randomUUID();
     cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: row.film_name, createdAt: Date.now() });
     res.json({ jobId: jobId });
-    processCut(jobId, row.asset_id, clips); // run in the background
+    processCut(jobId, row.playback_id, clips); // run in the background
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
