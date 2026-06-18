@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.6.1 — 🔒 Signed playback: private master';
+const APP_VERSION = 'v0.6.2 — 🔎 Signed-playback diagnostic';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -196,6 +196,44 @@ app.get('/health', async (req, res) => {
 
 // Quick read-only version check.
 app.get('/version', (req, res) => res.json({ version: APP_VERSION }));
+
+// TEMPORARY signed-playback diagnostic — remove once verified. Returns NO secrets
+// (no private key, no signature) — only lengths, the decoded JWT claims, and the
+// asset's live playback policy, so we can see exactly why Mux rejects a token.
+app.get('/api/_signdiag', async (req, res) => {
+  try {
+    const out = {
+      signingConfigured: signingConfigured(),
+      keyIdLength: MUX_SIGNING_KEY_ID.length,
+      privateKeyLength: MUX_SIGNING_KEY_PRIVATE.length,
+      privateKeyLooksLikePem: /BEGIN/.test(MUX_SIGNING_KEY_PRIVATE)
+    };
+    if (pool) {
+      let q = await pool.query("SELECT * FROM reel_sends WHERE playback_signed = true ORDER BY created_at DESC LIMIT 1");
+      if (!q.rows.length) q = await pool.query("SELECT * FROM reel_sends ORDER BY created_at DESC LIMIT 1");
+      if (q.rows.length) {
+        const row = q.rows[0];
+        out.send = { filmName: row.film_name, status: row.status, playbackSigned: row.playback_signed, playbackId: row.playback_id, hasAsset: !!row.asset_id };
+        const dec = (x) => { try { return JSON.parse(Buffer.from(String(x).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')); } catch (e) { return { parseError: true }; } };
+        const tok = signMuxToken(row.playback_id, 'v', 60);
+        if (tok) {
+          const parts = tok.split('.');
+          const payload = dec(parts[1]);
+          out.token = { segments: parts.length, header: dec(parts[0]), payload: payload, subMatchesPlaybackId: payload.sub === row.playback_id };
+        } else { out.token = 'not minted (signing off or no playback id)'; }
+        if (muxConfigured() && row.asset_id) {
+          try {
+            const a = await muxFetch('/video/v1/assets/' + row.asset_id);
+            out.muxAsset = { status: a.status, playbackIds: (a.playback_ids || []).map(function (p) { return { id: p.id, policy: p.policy }; }) };
+          } catch (e) { out.muxAsset = { error: e.message }; }
+        }
+      } else { out.send = 'no sends found'; }
+    }
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // --- Milestone 2: real video via Mux ---
 
