@@ -215,7 +215,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.6.8 &mdash; &#9203; Metered: your balance ticks down</footer>
+  <footer class="ver">Magic Reel &middot; v0.6.9 &mdash; &#128274; Signed playback: private preview</footer>
 </div>
 
 <div class="bar">
@@ -279,7 +279,14 @@
   var stageMsg=$('stageMsg');
   function showMsg(txt,spin){ stageMsg.innerHTML='<div class="sm-in">'+(spin?'<div class="spin2"></div>':'')+'<span>'+txt+'</span></div>'; stageMsg.style.display='flex'; }
   function hideMsg(){ stageMsg.style.display='none'; }
-  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } player.setAttribute('playback-id', j.playbackId); CTX.ready=true; hideMsg(); }
+  // For signed assets the server returns a short-lived playback-token; set it before the id
+  // so mux-video includes it when it loads. Public assets return no token (works unchanged).
+  function setPlayback(j){
+    if(j && j.playbackToken) player.setAttribute('playback-token', j.playbackToken);
+    else player.removeAttribute('playback-token');
+    player.setAttribute('playback-id', j.playbackId);
+  }
+  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; hideMsg(); }
   var loadPoll=null;
   function checkSend(id){ fetch('/api/sends/'+id+'/status').then(function(r){return r.json();}).then(function(j){ if(j.status==='ready'&&j.playbackId){ clearTimeout(loadPoll); loadFilm(j); } else if(j.status==='error'){ clearTimeout(loadPoll); showMsg('This film couldn\u2019t be processed.',false); } else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(function(){checkSend(id);},3000); } }).catch(function(){ loadPoll=setTimeout(function(){checkSend(id);},4000); }); }
   // Token mode: load this recipient's film + their personal budget from the server.
@@ -302,7 +309,7 @@
     }).then(function(j){
       if(!j) return;
       applyRecipient(j);
-      if(j.status==='ready'&&j.playbackId){ CTX.ready=true; player.setAttribute('playback-id', j.playbackId); hideMsg(); }
+      if(j.status==='ready'&&j.playbackId){ CTX.ready=true; setPlayback(j); hideMsg(); }
       else if(j.status==='error'){ showMsg('This film couldn\u2019t be processed.',false); }
       else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(loadByToken,3000); }
     }).catch(function(){ loadPoll=setTimeout(loadByToken,4000); });

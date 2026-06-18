@@ -288,7 +288,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.5.1 &mdash; &#128231; Auto-email reel links</footer>
+  <footer class="ver">Magic Reel &middot; v0.5.2 &mdash; &#128274; Signed playback ready</footer>
 </div>
 
 <div class="bar">
@@ -408,14 +408,16 @@
     clearTimeout(state.pollTimer);
     fetch('/api/sends/'+sendId+'/status').then(function(r){return r.json();}).then(function(j){
       if(sendId!==state.sendId) return; // a newer file replaced this one
-      if(j.status==='ready'){ state.playbackId=j.playbackId; renderUp('Transcoded and ready','ready'); showPreview(j.playbackId); }
+      if(j.status==='ready'){ state.playbackId=j.playbackId; renderUp('Transcoded and ready','ready'); showPreview(j); }
       else if(j.status==='error'){ renderUp('Mux couldn\u2019t process this file.','err'); }
       else { renderUp('Transcoding\u2026 this can take a moment<span class="barwrap"><span class="bf" style="width:100%"></span></span>'); state.pollTimer=setTimeout(function(){pollStatus(sendId);},3000); }
     }).catch(function(){ state.pollTimer=setTimeout(function(){pollStatus(sendId);},4000); });
   }
-  function showPreview(pid){
-    if(!pid) return;
-    upPreview.innerHTML='<iframe src="https://player.mux.com/'+pid+'?max_resolution=480p" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe><div class="cap">Your film, transcoded and streaming from Mux (preview capped at 480p).</div>';
+  function showPreview(j){
+    var pid=j&&j.playbackId; if(!pid) return;
+    var q='?max_resolution=480p';
+    if(j.playbackToken){ q+='&token='+encodeURIComponent(j.playbackToken); if(j.thumbnailToken)q+='&thumbnail_token='+encodeURIComponent(j.thumbnailToken); if(j.storyboardToken)q+='&storyboard_token='+encodeURIComponent(j.storyboardToken); }
+    upPreview.innerHTML='<iframe src="https://player.mux.com/'+pid+q+'" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe><div class="cap">Your film, transcoded and streaming from Mux (preview capped at 480p).</div>';
     upPreview.classList.remove('hidden');
   }
   function clearFile(){

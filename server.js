@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.6.0 — ⏳ Metered links: budget that runs out';
+const APP_VERSION = 'v0.6.1 — 🔒 Signed playback: private master';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -103,6 +103,33 @@ async function sendReelEmail(to, name, link, filmName, budgetSeconds) {
   } catch (e) { return { ok: false, reason: 'exception', detail: e.message }; }
 }
 
+// --- Mux signed playback (opt-in: dormant unless a signing key is set) ---
+// Makes the master private so the ONLY way to get video is the metered cut endpoint.
+const MUX_SIGNING_KEY_ID = process.env.MUX_SIGNING_KEY_ID || '';
+const MUX_SIGNING_KEY_PRIVATE = process.env.MUX_SIGNING_KEY_PRIVATE || '';
+const PLAYBACK_TTL = 6 * 3600; // signed tokens live 6h; a fresh one is minted on every page load
+function signingConfigured() { return !!(MUX_SIGNING_KEY_ID && MUX_SIGNING_KEY_PRIVATE); }
+function b64url(buf) { return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function signingKeyPem() { const k = MUX_SIGNING_KEY_PRIVATE; return /BEGIN/.test(k) ? k : Buffer.from(k, 'base64').toString('utf8'); }
+function signMuxToken(playbackId, aud, ttlSeconds) {
+  if (!signingConfigured() || !playbackId) return null;
+  const header = { alg: 'RS256', typ: 'JWT', kid: MUX_SIGNING_KEY_ID };
+  const payload = { sub: playbackId, aud: aud, exp: Math.floor(Date.now() / 1000) + (ttlSeconds || PLAYBACK_TTL) };
+  const signingInput = b64url(JSON.stringify(header)) + '.' + b64url(JSON.stringify(payload));
+  const sig = crypto.sign('RSA-SHA256', Buffer.from(signingInput), signingKeyPem());
+  return signingInput + '.' + b64url(sig);
+}
+// aud: 'v' video, 't' thumbnail, 's' storyboard. mux-video only needs the video token;
+// the others let a full mux-player show its poster + scrubbing previews.
+function playbackTokens(playbackId, isSigned) {
+  if (!playbackId || !isSigned || !signingConfigured()) return {};
+  return {
+    playbackToken: signMuxToken(playbackId, 'v', PLAYBACK_TTL),
+    thumbnailToken: signMuxToken(playbackId, 't', PLAYBACK_TTL),
+    storyboardToken: signMuxToken(playbackId, 's', PLAYBACK_TTL)
+  };
+}
+
 // Magic Reel's own table — prefixed reel_ so it can never collide with Magic Story Maker's tables.
 async function ensureSchema() {
   if (!pool) return;
@@ -115,9 +142,11 @@ async function ensureSchema() {
     ' playback_id TEXT,' +
     " status TEXT NOT NULL DEFAULT 'created'," +
     ' duration DOUBLE PRECISION,' +
+    ' playback_signed BOOLEAN NOT NULL DEFAULT false,' +
     ' created_at TIMESTAMPTZ NOT NULL DEFAULT now()' +
     ')'
   );
+  await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS playback_signed BOOLEAN NOT NULL DEFAULT false');
   await pool.query(
     'CREATE TABLE IF NOT EXISTS reel_recipients (' +
     ' token TEXT PRIMARY KEY,' +
@@ -134,7 +163,10 @@ async function ensureSchema() {
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS used_seconds DOUBLE PRECISION NOT NULL DEFAULT 0');
 }
 function publicSend(r) {
-  return { sendId: r.id, filmName: r.film_name, status: r.status, playbackId: r.playback_id, duration: r.duration };
+  return Object.assign(
+    { sendId: r.id, filmName: r.film_name, status: r.status, playbackId: r.playback_id, duration: r.duration },
+    playbackTokens(r.playback_id, r.playback_signed)
+  );
 }
 
 app.use(express.json());
@@ -152,7 +184,7 @@ app.get('/r/:token?', (req, res) =>
 
 // --- health check: confirms the service is up and the database is reachable ---
 app.get('/health', async (req, res) => {
-  const base = { ok: true, version: APP_VERSION, mux: muxConfigured(), ffmpeg: !!ffmpegPath, resend: resendConfigured() };
+  const base = { ok: true, version: APP_VERSION, mux: muxConfigured(), ffmpeg: !!ffmpegPath, resend: resendConfigured(), signing: signingConfigured() };
   if (!pool) return res.json(Object.assign(base, { db: 'not configured' }));
   try {
     const r = await pool.query('SELECT now() AS now');
@@ -173,17 +205,18 @@ app.post('/api/uploads', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet (set DATABASE_URL).' });
   try {
     const filmName = (req.body && req.body.filmName) || 'Untitled';
+    const signed = signingConfigured();
     const upload = await muxFetch('/video/v1/uploads', {
       method: 'POST',
       body: {
         cors_origin: req.headers.origin || '*',
-        new_asset_settings: { playback_policies: ['public'], video_quality: 'basic' }
+        new_asset_settings: { playback_policies: [signed ? 'signed' : 'public'], video_quality: 'basic' }
       }
     });
     const id = crypto.randomUUID();
     await pool.query(
-      'INSERT INTO reel_sends (id, film_name, upload_id, status) VALUES ($1, $2, $3, $4)',
-      [id, filmName, upload.id, 'uploading']
+      'INSERT INTO reel_sends (id, film_name, upload_id, status, playback_signed) VALUES ($1, $2, $3, $4, $5)',
+      [id, filmName, upload.id, 'uploading', signed]
     );
     res.json({ sendId: id, uploadUrl: upload.url });
   } catch (e) {
@@ -551,16 +584,16 @@ app.get('/api/r/:token', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
   try {
     const r = await pool.query(
-      'SELECT rec.name, rec.budget_seconds, rec.used_seconds, s.film_name, s.playback_id, s.duration, s.status' +
+      'SELECT rec.name, rec.budget_seconds, rec.used_seconds, s.film_name, s.playback_id, s.playback_signed, s.duration, s.status' +
       ' FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
       [req.params.token]);
     if (!r.rows.length) return res.status(404).json({ error: 'This link is not valid.' });
     const row = r.rows[0];
-    res.json({
+    res.json(Object.assign({
       name: row.name, filmName: row.film_name, playbackId: row.playback_id,
       duration: row.duration, budgetSeconds: row.budget_seconds,
       usedSeconds: Number(row.used_seconds) || 0, status: row.status
-    });
+    }, playbackTokens(row.playback_id, row.playback_signed)));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -652,7 +685,7 @@ function sweepStaleCuts() {
 // Exposed for logic tests (see test_helpers.js).
 module.exports = {
   sanitizeClips, sumSeconds, clipCreateBody, pickReadyMp4, concatLooksCorrect,
-  genToken, withinBudget, meterCheck, fmtClock, emailEsc,
+  genToken, withinBudget, meterCheck, fmtClock, emailEsc, signMuxToken, b64url,
   safeFilename, muxDownloadUrl, concatListText, parseFfmpegDuration, round2,
   MIN_CLIP_SECONDS, MAX_CUT_SECONDS, MAX_RANGES, APP_VERSION
 };
