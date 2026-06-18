@@ -215,7 +215,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.6.6 &mdash; &#129525; Reel build: live progress</footer>
+  <footer class="ver">Magic Reel &middot; v0.6.7 &mdash; &#128273; Private link: token + your budget</footer>
 </div>
 
 <div class="bar">
@@ -230,7 +230,8 @@
 <script>
 (function(){
   "use strict";
-  var CTX={name:'Eleanor Vance',sender:'Isaiah Smith',film:'The Lighthouse Keeper',duration:872,budget:120};
+  var CTX={name:'Eleanor Vance',sender:'Isaiah Smith',film:'The Lighthouse Keeper',duration:872,budget:120,ready:false};
+  var TOKEN=(location.pathname.match(/^\/r\/([^\/?#]+)/)||[])[1]||null;
   var $=function(id){return document.getElementById(id);};
   function fmt(s){s=Math.max(0,Math.round(s));var m=Math.floor(s/60),ss=s%60;return m+':'+(ss<10?'0':'')+ss;}
 
@@ -238,7 +239,10 @@
 
   var st={t:0,playing:false,markIn:null,markOut:null,segments:[]};
 
-  (function(){var label='MAGIC REEL \u00b7 PREVIEW';var svg='<svg xmlns="http://www.w3.org/2000/svg" width="260" height="150"><text x="6" y="78" font-family="Poppins, Arial, sans-serif" font-size="12" font-weight="600" fill="rgba(255,255,255,0.16)" transform="rotate(-26 130 75)">'+label+'</text></svg>';$('wm').style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';$('wm').style.backgroundRepeat='repeat';})();
+  function xmlEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function initials(name){var p=String(name||'').trim().split(/\s+/);var a=(p[0]||'')[0]||'';var b=(p.length>1?(p[p.length-1][0]||''):'');return ((a+b).toUpperCase())||'\u2726';}
+  function setWatermark(name){var label=name?(xmlEsc(name)+' \u00b7 MAGIC REEL'):'MAGIC REEL \u00b7 PREVIEW';var svg='<svg xmlns="http://www.w3.org/2000/svg" width="260" height="150"><text x="6" y="78" font-family="Poppins, Arial, sans-serif" font-size="12" font-weight="600" fill="rgba(255,255,255,0.16)" transform="rotate(-26 130 75)">'+label+'</text></svg>';$('wm').style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';$('wm').style.backgroundRepeat='repeat';}
+  setWatermark(null);
 
   $('grName').textContent='there';
   $('grSender').textContent=CTX.sender;
@@ -275,15 +279,42 @@
   var stageMsg=$('stageMsg');
   function showMsg(txt,spin){ stageMsg.innerHTML='<div class="sm-in">'+(spin?'<div class="spin2"></div>':'')+'<span>'+txt+'</span></div>'; stageMsg.style.display='flex'; }
   function hideMsg(){ stageMsg.style.display='none'; }
-  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } player.setAttribute('playback-id', j.playbackId); hideMsg(); }
+  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } player.setAttribute('playback-id', j.playbackId); CTX.ready=true; hideMsg(); }
   var loadPoll=null;
   function checkSend(id){ fetch('/api/sends/'+id+'/status').then(function(r){return r.json();}).then(function(j){ if(j.status==='ready'&&j.playbackId){ clearTimeout(loadPoll); loadFilm(j); } else if(j.status==='error'){ clearTimeout(loadPoll); showMsg('This film couldn\u2019t be processed.',false); } else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(function(){checkSend(id);},3000); } }).catch(function(){ loadPoll=setTimeout(function(){checkSend(id);},4000); }); }
+  // Token mode: load this recipient's film + their personal budget from the server.
+  // No token (opened at /): fall back to the latest-upload demo behavior.
+  function applyRecipient(j){
+    CTX.name=j.name||CTX.name; CTX.film=j.filmName||CTX.film;
+    if(typeof j.budgetSeconds==='number') CTX.budget=j.budgetSeconds;
+    $('grName').textContent=CTX.name; $('grAva').textContent=initials(CTX.name);
+    $('grFilm').textContent=CTX.film;
+    $('grCap').textContent=CTX.sender.split(' ')[0]+' set your reel length to '+fmt(CTX.budget);
+    setWatermark(CTX.name);
+    if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); }
+    updateMarkers(); renderSegments(); renderBudget();
+  }
+  function loadByToken(){
+    fetch('/api/r/'+encodeURIComponent(TOKEN)).then(function(r){
+      if(r.status===404){ showMsg('This link isn\u2019t valid or has expired.',false); return null; }
+      return r.json();
+    }).then(function(j){
+      if(!j) return;
+      applyRecipient(j);
+      if(j.status==='ready'&&j.playbackId){ CTX.ready=true; player.setAttribute('playback-id', j.playbackId); hideMsg(); }
+      else if(j.status==='error'){ showMsg('This film couldn\u2019t be processed.',false); }
+      else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(loadByToken,3000); }
+    }).catch(function(){ loadPoll=setTimeout(loadByToken,4000); });
+  }
   showMsg('Loading your footage\u2026',true);
-  fetch('/api/sends/latest').then(function(r){return r.json();}).then(function(j){
-    if(!j || j.none){ showMsg('No footage has been uploaded yet. Drop a film on the send screen first.',false); return; }
-    CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film;
-    if(j.status==='ready'&&j.playbackId){ loadFilm(j); } else { checkSend(j.sendId); }
-  }).catch(function(){ showMsg('Couldn\u2019t reach the server.',false); });
+  if(TOKEN){ loadByToken(); }
+  else {
+    fetch('/api/sends/latest').then(function(r){return r.json();}).then(function(j){
+      if(!j || j.none){ showMsg('No footage has been uploaded yet. Drop a film on the send screen first.',false); return; }
+      CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film;
+      if(j.status==='ready'&&j.playbackId){ loadFilm(j); } else { checkSend(j.sendId); }
+    }).catch(function(){ showMsg('Couldn\u2019t reach the server.',false); });
+  }
 
   function used(){return st.segments.reduce(function(a,s){return a+(s.out-s.in);},0);}
   function remaining(){return CTX.budget-used();}
@@ -372,10 +403,11 @@
   }
   function startCut(){
     if(!st.segments.length) return;
-    if(!CTX.sendId){ dlScrim.classList.add('show'); renderErr('No film is loaded yet.'); return; }
+    if(!CTX.ready){ dlScrim.classList.add('show'); renderErr('No film is loaded yet.'); return; }
     if(st.playing) setPlaying(false);
     dlScrim.classList.add('show'); renderProc({phase:'queued'});
-    fetch('/api/sends/'+CTX.sendId+'/cut',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clips:st.segments.map(function(s){return [s.in,s.out];})})})
+    var cutUrl=TOKEN?('/api/r/'+encodeURIComponent(TOKEN)+'/cut'):('/api/sends/'+CTX.sendId+'/cut');
+    fetch(cutUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clips:st.segments.map(function(s){return [s.in,s.out];})})})
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
       .then(function(res){ if(!res.ok){ renderErr(res.j.error||'Server error.'); return; } pollCut(res.j.jobId); })
       .catch(function(){ renderErr('Couldn\u2019t reach the server.'); });
