@@ -203,6 +203,11 @@
   .hidden{display:none !important}
   @media (max-width:540px){.wrap{padding:0 16px} .crow .nm{flex:0 0 42%} .send{padding:12px 18px;font-size:14.5px} .seg button{font-size:12px;padding:8px 5px}}
   @media (prefers-reduced-motion:reduce){*{animation-duration:.001s !important;transition-duration:.001s !important}}
+  .sentlist .sr .lk{font-size:11px;color:var(--accent);font-variant-numeric:tabular-nums;word-break:break-all;margin-top:2px}
+  .cpbtn{flex:0 0 auto;display:flex;align-items:center;gap:5px;border:1px solid var(--border);background:transparent;color:var(--text);border-radius:8px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:500;padding:6px 9px;transition:border-color .15s,color .15s}
+  .cpbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .cpbtn svg{width:13px;height:13px}
+  .cpbtn.copied{border-color:var(--good);color:var(--good)}
 </style>
 </head>
 <body class="dark">
@@ -282,7 +287,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.4 &mdash; &#128101; One List: project, roster, or custom in one send</footer>
+  <footer class="ver">Magic Reel &middot; v0.5 &mdash; &#128231; Send: real private links per person</footer>
 </div>
 
 <div class="bar">
@@ -342,7 +347,7 @@
 
   /* ---- recipients model ---- */
   var CAP_OPTS=[30,60,90,120,150,180,240,300];
-  var state={src:'project',projectId:'',recipients:[],file:null,globalCap:120};
+  var state={src:'custom',projectId:'',recipients:[],file:null,globalCap:120};
   var customSeq=0;
   function effCap(rec){return rec.override!=null?rec.override:state.globalCap;}
   function findByPid(pid){for(var i=0;i<state.recipients.length;i++){var r=state.recipients[i];if(r.kind==='person'&&r.pid===pid)return r;}return null;}
@@ -436,6 +441,14 @@
     if(state.src==='project')renderProjPick();
     else if(state.src==='database')renderRoster();
   });
+
+  // Option A: only the "Someone new" path is wired for now — the project & roster
+  // pulls return in M4 once your real cast/crew roster exists. Hide the other sources.
+  seg.style.display='none';
+  $('srcProject').classList.add('hidden');
+  $('srcDatabase').classList.add('hidden');
+  $('srcCustom').classList.remove('hidden');
+  state.src='custom';
 
   /* ---- shared picker row ---- */
   var pickRowEls={};
@@ -561,35 +574,52 @@
   }
   profileScrim.addEventListener('click',function(e){if(e.target===profileScrim)profileScrim.classList.remove('show');});
 
-  /* ---- send ---- */
+  /* ---- send: mint a private link per recipient (auto-email is the next step) ---- */
   var processScrim=$('processScrim'),processModal=$('processModal');
-  var STEPS=[{t:'Uploading your master'},{t:'Creating watermarked previews'},{t:'Sending secure links'}];
-  function renderProcessing(active){
-    var html='<div class="pipe">';
-    STEPS.forEach(function(s,i){var cls=i<active?'done':(i===active?'active':'');var inner=i<active?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>':(i===active?'<span class="spin"></span>':'');html+='<div class="pl '+cls+'"><span class="dot">'+inner+'</span>'+s.t+'</div>';});
-    html+='</div>';
-    processModal.innerHTML='<h3>Sending your reel</h3><p class="lede">You can close this and walk away &mdash; everyone gets an email the moment it&rsquo;s ready.</p>'+html;
+  function renderMinting(){
+    processModal.innerHTML='<h3>Creating private links</h3><p class="lede">Minting a unique, watermarked link for each recipient&hellip;</p><div class="pipe"><div class="pl active"><span class="dot"><span class="spin"></span></span>Creating links</div></div>';
   }
-  function renderSent(recs){
+  function fallbackCopy(text){try{var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');document.body.removeChild(ta);}catch(e){}}
+  function renderResults(results,errors){
     var list='<div class="sentlist">';
-    recs.forEach(function(rec){var col=rec.kind==='person'?avaColor(rec.pid):avaColor(rec.id);list+='<div class="sr"><div class="ava" style="background:'+col+'">'+initials(rec.name)+'</div><div class="si"><div class="nm">'+esc(rec.name)+'</div><div class="em">'+esc(rec.email)+'</div></div><span class="cp">'+fmt(effCap(rec))+'</span></div>';});
+    results.forEach(function(r){var col=r.rec.kind==='person'?avaColor(r.rec.pid):avaColor(r.rec.id);
+      list+='<div class="sr"><div class="ava" style="background:'+col+'">'+initials(r.rec.name)+'</div>'+
+        '<div class="si"><div class="nm">'+esc(r.rec.name)+'</div><div class="em">'+esc(r.rec.email)+' \u00b7 '+fmt(effCap(r.rec))+'</div><div class="lk">'+esc(r.url)+'</div></div>'+
+        '<button class="cpbtn" data-url="'+esc(r.url)+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button></div>';
+    });
     list+='</div>';
-    processModal.innerHTML='<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Links sent</h3><p class="lede">'+recs.length+' '+(recs.length===1?'person has':'people have')+' a private, watermarked link to your film.</p>'+list+'<p class="note2">Each person can pull up to the length shown and download a clean cut.</p><button class="modalbtn" id="sendAnother">Send another</button>';
+    var errHTML=errors.length?('<p class="note2" style="color:var(--err)">Couldn\u2019t create '+errors.length+' ('+errors.map(function(e){return esc(e.name);}).join(', ')+') \u2014 try Send again.</p>'):'';
+    var head=results.length
+      ?'<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Private links ready</h3><p class="lede">Copy each link and send it to the person. Automatic email is coming next.</p>'
+      :'<h3>No links created</h3><p class="lede">Something went wrong creating the links.</p>';
+    processModal.innerHTML=head+(results.length?list:'')+errHTML+'<button class="modalbtn" id="sendAnother">Done</button>';
+    Array.prototype.forEach.call(processModal.querySelectorAll('.cpbtn'),function(btn){
+      btn.addEventListener('click',function(){var u=btn.getAttribute('data-url');var old=btn.innerHTML;
+        function done(){btn.classList.add('copied');btn.textContent='Copied';setTimeout(function(){btn.classList.remove('copied');btn.innerHTML=old;},1400);}
+        if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(done,function(){fallbackCopy(u);done();});}else{fallbackCopy(u);done();}
+      });
+    });
     $('sendAnother').addEventListener('click',resetAll);
   }
   function resetAll(){
     processScrim.classList.remove('show');clearFile();
-    state.recipients=[];state.projectId='';projsel.value='';
+    state.recipients=[];
     if(custName)custName.value='';if(custEmail)custEmail.value='';
-    pickRowEls={};
-    if(state.src==='project')renderProjPick();else if(state.src==='database')renderRoster();
     renderRecipientList();refresh();
   }
   $('sendbtn').addEventListener('click',function(){
     if(!state.file||state.recipients.length===0)return;
-    var recs=state.recipients.slice();
-    processScrim.classList.add('show');var i=0;renderProcessing(0);
-    var t=setInterval(function(){i++;if(i>=STEPS.length){clearInterval(t);renderSent(recs);}else renderProcessing(i);},1100);
+    if(!state.sendId){ processScrim.classList.add('show'); processModal.innerHTML='<h3>Almost there</h3><p class="lede">Your film is still preparing its upload \u2014 give it a moment, then tap Send again.</p><button class="modalbtn" id="sendAnother">OK</button>'; $('sendAnother').addEventListener('click',function(){processScrim.classList.remove('show');}); return; }
+    var recs=state.recipients.slice(), sendId=state.sendId, results=[], errors=[];
+    processScrim.classList.add('show'); renderMinting();
+    var chain=Promise.resolve();
+    recs.forEach(function(rec){ chain=chain.then(function(){
+      return fetch('/api/recipients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sendId:sendId,name:rec.name,email:rec.email,budgetSeconds:effCap(rec)})})
+        .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+        .then(function(res){ if(res.ok&&res.j.token){ results.push({rec:rec,url:location.origin+'/r/'+res.j.token}); } else { errors.push({name:rec.name}); } })
+        .catch(function(){ errors.push({name:rec.name}); });
+    });});
+    chain.then(function(){ renderResults(results,errors); });
   });
 
   renderProjPick();renderRecipientList();refresh();

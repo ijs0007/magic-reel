@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.4.0 — 🔑 Recipients: tokens + budget guard';
+const APP_VERSION = 'v0.4.2 — 📧 Recipients carry email';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -88,10 +88,13 @@ async function ensureSchema() {
     ' token TEXT PRIMARY KEY,' +
     ' send_id TEXT NOT NULL,' +
     ' name TEXT,' +
+    ' email TEXT,' +
     ' budget_seconds INTEGER NOT NULL DEFAULT 120,' +
     ' created_at TIMESTAMPTZ NOT NULL DEFAULT now()' +
     ')'
   );
+  // migrate older reel_recipients tables that predate the email column
+  await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS email TEXT');
 }
 function publicSend(r) {
   return { sendId: r.id, filmName: r.film_name, status: r.status, playbackId: r.playback_id, duration: r.duration };
@@ -476,15 +479,16 @@ app.post('/api/recipients', async (req, res) => {
     const b = req.body || {};
     if (!b.sendId) return res.status(400).json({ error: 'sendId is required.' });
     const name = (typeof b.name === 'string' && b.name.trim()) ? b.name.trim().slice(0, 80) : 'Guest';
+    const email = (typeof b.email === 'string' && b.email.trim()) ? b.email.trim().slice(0, 200) : null;
     let budget = parseInt(b.budgetSeconds, 10);
     if (!isFinite(budget) || budget <= 0) budget = 120;
     budget = Math.min(budget, MAX_CUT_SECONDS);
     const s = await pool.query('SELECT id FROM reel_sends WHERE id = $1', [b.sendId]);
     if (!s.rows.length) return res.status(404).json({ error: 'No such send.' });
     const token = genToken();
-    await pool.query('INSERT INTO reel_recipients (token, send_id, name, budget_seconds) VALUES ($1, $2, $3, $4)',
-      [token, b.sendId, name, budget]);
-    res.json({ token: token, link: '/r/' + token, name: name, budgetSeconds: budget });
+    await pool.query('INSERT INTO reel_recipients (token, send_id, name, email, budget_seconds) VALUES ($1, $2, $3, $4, $5)',
+      [token, b.sendId, name, email, budget]);
+    res.json({ token: token, link: '/r/' + token, name: name, email: email, budgetSeconds: budget });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
