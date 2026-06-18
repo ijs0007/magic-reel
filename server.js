@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.6.3 — 🔒 Signed playback: confirmed';
+const APP_VERSION = 'v0.7.0 — 📊 Dashboard: sends, usage, gate';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -130,6 +130,21 @@ function playbackTokens(playbackId, isSigned) {
   };
 }
 
+// --- Owner gate for the dashboard (opt-in: open until DASHBOARD_PASSWORD is set).
+//     Set it to your MSM password for a unified feel. Recipient pages are never gated
+//     (their token IS their key). True shared login comes when Magic Reel merges into MSM. ---
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || '';
+function requireDashboardAuth(req, res, next) {
+  if (!DASHBOARD_PASSWORD) return next();
+  const m = (req.headers.authorization || '').match(/^Basic (.+)$/);
+  if (m) {
+    const decoded = Buffer.from(m[1], 'base64').toString('utf8');
+    if (decoded.slice(decoded.indexOf(':') + 1) === DASHBOARD_PASSWORD) return next();
+  }
+  res.set('WWW-Authenticate', 'Basic realm="Magic Reel"');
+  return res.status(401).send('Authentication required.');
+}
+
 // Magic Reel's own table — prefixed reel_ so it can never collide with Magic Story Maker's tables.
 async function ensureSchema() {
   if (!pool) return;
@@ -161,6 +176,8 @@ async function ensureSchema() {
   // migrate older reel_recipients tables that predate these columns
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS email TEXT');
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS used_seconds DOUBLE PRECISION NOT NULL DEFAULT 0');
+  await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS opened_at TIMESTAMPTZ');
+  await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS last_cut_at TIMESTAMPTZ');
 }
 function publicSend(r) {
   return Object.assign(
@@ -170,6 +187,7 @@ function publicSend(r) {
 }
 
 app.use(express.json());
+app.get(['/dashboard', '/dashboard.html'], requireDashboardAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- pages ---
@@ -184,7 +202,7 @@ app.get('/r/:token?', (req, res) =>
 
 // --- health check: confirms the service is up and the database is reachable ---
 app.get('/health', async (req, res) => {
-  const base = { ok: true, version: APP_VERSION, mux: muxConfigured(), ffmpeg: !!ffmpegPath, resend: resendConfigured(), signing: signingConfigured() };
+  const base = { ok: true, version: APP_VERSION, mux: muxConfigured(), ffmpeg: !!ffmpegPath, resend: resendConfigured(), signing: signingConfigured(), dashboardAuth: !!DASHBOARD_PASSWORD };
   if (!pool) return res.json(Object.assign(base, { db: 'not configured' }));
   try {
     const r = await pool.query('SELECT now() AS now');
@@ -196,6 +214,32 @@ app.get('/health', async (req, res) => {
 
 // Quick read-only version check.
 app.get('/version', (req, res) => res.json({ version: APP_VERSION }));
+
+// Owner dashboard data: every send you've made, with each recipient's usage + status.
+app.get('/api/dashboard', requireDashboardAuth, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const sends = await pool.query('SELECT id, film_name, status, duration, created_at FROM reel_sends ORDER BY created_at DESC');
+    const recips = await pool.query('SELECT token, send_id, name, email, budget_seconds, used_seconds, created_at, opened_at, last_cut_at FROM reel_recipients ORDER BY created_at ASC');
+    const bySend = {};
+    recips.rows.forEach(function (r) {
+      (bySend[r.send_id] = bySend[r.send_id] || []).push({
+        token: r.token, name: r.name, email: r.email,
+        cap: r.budget_seconds, used: Number(r.used_seconds) || 0,
+        createdAt: r.created_at, openedAt: r.opened_at, lastCutAt: r.last_cut_at
+      });
+    });
+    res.json({
+      sends: sends.rows
+        .filter(function (s) { return bySend[s.id]; }) // only sends actually delivered to someone
+        .map(function (s) {
+          return { id: s.id, title: s.film_name || 'Untitled', dur: s.duration, status: s.status, createdAt: s.created_at, recipients: bySend[s.id] };
+        })
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // --- Milestone 2: real video via Mux ---
 
@@ -589,6 +633,7 @@ app.get('/api/r/:token', async (req, res) => {
       [req.params.token]);
     if (!r.rows.length) return res.status(404).json({ error: 'This link is not valid.' });
     const row = r.rows[0];
+    pool.query('UPDATE reel_recipients SET opened_at = COALESCE(opened_at, now()) WHERE token = $1', [req.params.token]).catch(function () {});
     res.json(Object.assign({
       name: row.name, filmName: row.film_name, playbackId: row.playback_id,
       duration: row.duration, budgetSeconds: row.budget_seconds,
@@ -627,7 +672,7 @@ app.post('/api/r/:token/cut', async (req, res) => {
     }
     if (total > MAX_CUT_SECONDS) return res.status(400).json({ error: 'That selection is too long.' });
     // Reserve the seconds now (refunded automatically if the cut fails on Mux).
-    await pool.query('UPDATE reel_recipients SET used_seconds = used_seconds + $1 WHERE token = $2', [total, req.params.token]);
+    await pool.query('UPDATE reel_recipients SET used_seconds = used_seconds + $1, last_cut_at = now() WHERE token = $2', [total, req.params.token]);
     res.json({ jobId: startCutJob(row, clips, { token: req.params.token, charged: total }), remainingSeconds: Math.max(0, gate.remaining - total) });
   } catch (e) {
     res.status(500).json({ error: e.message });
