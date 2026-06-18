@@ -78,6 +78,15 @@
   select.msm{font-family:inherit;font-size:14px;padding:8px 30px 8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-webkit-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6a64' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
   select.msm:focus{outline:none;border-color:var(--accent)}
   .deflen select.msm{min-width:120px}
+  .deflen-custom{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin:2px 0 6px}
+  .deflen-custom .tnum{width:54px;font-family:inherit;font-size:14px;text-align:center;padding:8px 6px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-moz-appearance:textfield;appearance:textfield}
+  .deflen-custom .tnum::-webkit-outer-spin-button,.deflen-custom .tnum::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .deflen-custom .tnum:focus{outline:none;border-color:var(--accent)}
+  .deflen-custom .tnum.bad{border-color:var(--err)}
+  .deflen-custom .u{font-size:11.5px;color:var(--text-soft)}
+  .deflen-custom .colon{font-size:15px;color:var(--text-soft);margin:0 -1px}
+  .deflen-custom .dlc-hint{width:100%;text-align:right;font-size:11px;color:var(--text-soft);margin-top:-1px}
+  .deflen-custom .dlc-hint.warn{color:var(--err)}
 
   /* add-recipients sources */
   .addlbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);opacity:.72;margin:18px 0 9px}
@@ -249,6 +258,12 @@
       <div class="dl-label">Default reel length<small>How much each person can download</small></div>
       <select class="msm" id="defLen"></select>
     </div>
+    <div class="deflen-custom hidden" id="defLenCustom">
+      <input class="tnum" id="defMin" type="number" min="0" max="10" inputmode="numeric" aria-label="minutes"><span class="u">min</span>
+      <span class="colon">:</span>
+      <input class="tnum" id="defSec" type="number" min="0" max="59" inputmode="numeric" aria-label="seconds"><span class="u">sec</span>
+      <span class="dlc-hint" id="defLenHint">Up to 10:00</span>
+    </div>
 
     <p class="addlbl">Add recipients</p>
     <div class="seg" id="seg">
@@ -289,7 +304,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.8.0 &mdash; &#128279; Roster: live MSM cast &amp; crew</footer>
+  <footer class="ver">Magic Reel &middot; v0.8.2 &mdash; &#9201;&#65039; Custom length, per person too</footer>
 </div>
 
 <div class="bar">
@@ -344,7 +359,25 @@
 
   /* default-length select */
   CAP_OPTS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=fmt(s);if(s===120)o.selected=true;$('defLen').appendChild(o);});
-  $('defLen').addEventListener('change',function(){state.globalCap=parseInt($('defLen').value,10);renderRecipientList();});
+  (function(){var o=document.createElement('option');o.value='custom';o.textContent='Custom\u2026';$('defLen').appendChild(o);})();
+  function clampDefCustom(){
+    var m=parseInt($('defMin').value,10);if(isNaN(m))m=0;
+    var s=parseInt($('defSec').value,10);if(isNaN(s))s=0;
+    m=Math.max(0,Math.min(10,m));s=Math.max(0,Math.min(59,s));
+    var total=m*60+s,hint=$('defLenHint');
+    $('defMin').classList.remove('bad');$('defSec').classList.remove('bad');hint.classList.remove('warn');
+    if(total<1){hint.textContent='Enter at least 0:01';hint.classList.add('warn');$('defSec').classList.add('bad');return;}
+    if(total>600){total=600;$('defMin').value=10;$('defSec').value=0;hint.textContent='Capped at 10:00 (the maximum)';hint.classList.add('warn');}
+    else{hint.textContent='Up to 10:00';}
+    state.globalCap=total;renderRecipientList();
+  }
+  function showDefCustom(){var c=state.globalCap;$('defMin').value=Math.floor(c/60);$('defSec').value=c%60;$('defLenCustom').classList.remove('hidden');clampDefCustom();$('defMin').focus();$('defMin').select();}
+  $('defLen').addEventListener('change',function(){
+    if($('defLen').value==='custom'){showDefCustom();}
+    else{$('defLenCustom').classList.add('hidden');state.globalCap=parseInt($('defLen').value,10);renderRecipientList();}
+  });
+  $('defMin').addEventListener('input',clampDefCustom);
+  $('defSec').addEventListener('input',clampDefCustom);
 
   /* file */
   function fmtSize(b){if(!b)return'';var u=['B','KB','MB','GB'];var i=Math.floor(Math.log(b)/Math.log(1024));return (b/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];}
@@ -565,15 +598,35 @@
     var isP=rec.kind==='person';
     var col=isP?avaColor(rec.pid):avaColor(rec.id);
     var sub=isP?(rec.role||'In your database'):'Custom recipient';
-    var capSel='<select class="msm" id="capSel"><option value="">Match default ('+fmt(state.globalCap)+')</option>'+CAP_OPTS.map(function(s){return '<option value="'+s+'"'+(rec.override===s?' selected':'')+'>'+fmt(s)+'</option>';}).join('')+'</select>';
+    var ovr=rec.override;
+    var isCustomOvr=ovr!=null&&CAP_OPTS.indexOf(ovr)<0;
+    var capSel='<select class="msm" id="capSel"><option value=""'+(ovr==null?' selected':'')+'>Match default ('+fmt(state.globalCap)+')</option>'+CAP_OPTS.map(function(s){return '<option value="'+s+'"'+(ovr===s?' selected':'')+'>'+fmt(s)+'</option>';}).join('')+'<option value="custom"'+(isCustomOvr?' selected':'')+'>Custom\u2026</option></select>';
+    var capCustom='<div class="deflen-custom'+(isCustomOvr?'':' hidden')+'" id="capCustom"><input class="tnum" id="capMin" type="number" min="0" max="10" inputmode="numeric" aria-label="minutes"><span class="u">min</span><span class="colon">:</span><input class="tnum" id="capSec" type="number" min="0" max="59" inputmode="numeric" aria-label="seconds"><span class="u">sec</span><span class="dlc-hint" id="capHint">Up to 10:00</span></div>';
     var body='<div class="frow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg><span>'+esc(rec.email)+'</span></div>';
     if(isP&&PEOPLE[rec.pid]&&PEOPLE[rec.pid].phone)body+='<div class="frow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg><span>'+esc(PEOPLE[rec.pid].phone)+'</span></div>';
-    body+='<div class="fsec">Reel length for this person</div><div class="caprow"><div class="ct">Download cap<small>Overrides the default for '+esc(rec.name.split(' ')[0])+'</small></div>'+capSel+'</div>';
+    body+='<div class="fsec">Reel length for this person</div><div class="caprow"><div class="ct">Download cap<small>Overrides the default for '+esc(rec.name.split(' ')[0])+'</small></div>'+capSel+'</div>'+capCustom;
     if(isP){var projs=projectsForPerson(rec.pid);if(projs.length)body+='<div class="fsec">Worked on '+projs.length+' of your projects</div><div class="chips">'+projs.map(function(t){return '<span class="chip">'+esc(t)+'</span>';}).join('')+'</div>';}
     else body+='<div class="fsec">Not in your database</div><p style="font-size:12.5px;color:var(--text-soft);margin:0">Typed in for this send only.</p>';
     profileSheet.innerHTML='<div class="sheet-top"><div class="ava" style="background:'+col+'">'+initials(rec.name)+'</div><div class="who"><h4>'+esc(rec.name)+'</h4><span>'+esc(sub)+'</span></div></div><div class="sheet-body">'+body+'</div><button class="sheet-close" id="closeProfile">Close</button>';
     profileScrim.classList.add('show');
-    $('capSel').addEventListener('change',function(){var v=$('capSel').value;rec.override=v===''?null:parseInt(v,10);renderRecipientList();});
+    function clampCapCustom(){
+      var m=parseInt($('capMin').value,10);if(isNaN(m))m=0;
+      var s=parseInt($('capSec').value,10);if(isNaN(s))s=0;
+      m=Math.max(0,Math.min(10,m));s=Math.max(0,Math.min(59,s));
+      var total=m*60+s,hint=$('capHint');
+      $('capMin').classList.remove('bad');$('capSec').classList.remove('bad');hint.classList.remove('warn');
+      if(total<1){hint.textContent='Enter at least 0:01';hint.classList.add('warn');$('capSec').classList.add('bad');return;}
+      if(total>600){total=600;$('capMin').value=10;$('capSec').value=0;hint.textContent='Capped at 10:00 (the maximum)';hint.classList.add('warn');}
+      else{hint.textContent='Up to 10:00';}
+      rec.override=total;renderRecipientList();
+    }
+    $('capSel').addEventListener('change',function(){
+      var v=$('capSel').value;
+      if(v==='custom'){var c=(rec.override!=null?rec.override:state.globalCap);$('capMin').value=Math.floor(c/60);$('capSec').value=c%60;$('capCustom').classList.remove('hidden');clampCapCustom();$('capMin').focus();$('capMin').select();}
+      else{$('capCustom').classList.add('hidden');rec.override=(v===''?null:parseInt(v,10));renderRecipientList();}
+    });
+    $('capMin').addEventListener('input',clampCapCustom);
+    $('capSec').addEventListener('input',clampCapCustom);
     $('closeProfile').addEventListener('click',function(){profileScrim.classList.remove('show');});
   }
   profileScrim.addEventListener('click',function(e){if(e.target===profileScrim)profileScrim.classList.remove('show');});
