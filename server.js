@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.7.0 — 📊 Dashboard: sends, usage, gate';
+const APP_VERSION = 'v0.8.0 — 🔗 Roster: MSM cast/crew + app-wide login';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -130,20 +130,75 @@ function playbackTokens(playbackId, isSigned) {
   };
 }
 
-// --- Owner gate for the dashboard (opt-in: open until DASHBOARD_PASSWORD is set).
-//     Set it to your MSM password for a unified feel. Recipient pages are never gated
-//     (their token IS their key). True shared login comes when Magic Reel merges into MSM. ---
+// --- Whole-app owner gate (opt-in: open until DASHBOARD_PASSWORD is set).
+//     One password-only login page guards the entire owner surface (send screen,
+//     dashboard, all owner APIs). The recipient flow (/r/:token + its APIs) is NEVER
+//     gated — a recipient's token IS their key. Set DASHBOARD_PASSWORD to your MSM
+//     password for a unified feel. True shared login arrives when Magic Reel merges
+//     into MSM. Auth is a stateless signed cookie (HMAC of the password), no DB needed. ---
 const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || '';
-function requireDashboardAuth(req, res, next) {
-  if (!DASHBOARD_PASSWORD) return next();
-  const m = (req.headers.authorization || '').match(/^Basic (.+)$/);
-  if (m) {
-    const decoded = Buffer.from(m[1], 'base64').toString('utf8');
-    if (decoded.slice(decoded.indexOf(':') + 1) === DASHBOARD_PASSWORD) return next();
-  }
-  res.set('WWW-Authenticate', 'Basic realm="Magic Reel"');
-  return res.status(401).send('Authentication required.');
+const AUTH_COOKIE = 'mr_auth';
+function authToken() { return crypto.createHmac('sha256', DASHBOARD_PASSWORD || 'unset').update('mr-auth-v1').digest('hex'); }
+function parseCookies(req) {
+  const out = {}; (req.headers.cookie || '').split(';').forEach(function (p) {
+    const i = p.indexOf('='); if (i > 0) out[p.slice(0, i).trim()] = p.slice(i + 1).trim();
+  });
+  return out;
 }
+function isAuthed(req) { return !DASHBOARD_PASSWORD || parseCookies(req)[AUTH_COOKIE] === authToken(); }
+
+// Gate runs before static + routes. Owner surface needs the cookie; everything a
+// recipient or the login page touches passes through untouched.
+function gate(req, res, next) {
+  if (!DASHBOARD_PASSWORD) return next();
+  const p = req.path;
+  if (p === '/login' || p === '/api/login' || p === '/logout' || p === '/health' || p === '/version') return next();
+  if (p.indexOf('/r/') === 0 || p.indexOf('/api/r/') === 0 || p.indexOf('/api/cuts/') === 0) return next();
+  if (/\.(css|js|mjs|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|otf|map)$/i.test(p)) return next();
+  if (isAuthed(req)) return next();
+  if (p.indexOf('/api/') === 0) return res.status(401).json({ error: 'Not authenticated.' });
+  return res.redirect('/login');
+}
+
+const LOGIN_HTML = '<!doctype html><html lang="en"><head>' +
+'<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#faf9f5">' +
+'<title>Magic Reel</title>' +
+'<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+'<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">' +
+'<style>' +
+':root{--bg:#faf9f5;--surface:#fff;--text:#1a1a18;--text-soft:#6b6b66;--border:#e7e5df;--accent:#7c4dff;--accent-text:#fff;--bad:#c2410c}' +
+'*{box-sizing:border-box}' +
+'body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:24px}' +
+'.card{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:34px 28px;box-shadow:0 12px 40px rgba(0,0,0,.06)}' +
+'.brand{font-family:"Poppins",sans-serif;font-weight:700;font-size:22px;text-align:center;margin:0 0 4px}' +
+'.brand .dot{color:var(--accent)}' +
+'.sub{text-align:center;color:var(--text-soft);font-size:13.5px;margin:0 0 22px}' +
+'label{display:block;font-size:12.5px;color:var(--text-soft);margin:0 0 6px}' +
+'input{width:100%;font-family:inherit;font-size:15px;padding:12px 13px;border:1px solid var(--border);border-radius:10px;background:#fbfbf9;color:var(--text);outline:none}' +
+'input:focus{border-color:var(--accent)}input.bad{border-color:var(--bad)}' +
+'button{width:100%;margin-top:16px;font-family:inherit;font-size:15px;font-weight:600;padding:12px;border:none;border-radius:10px;background:var(--accent);color:var(--accent-text);cursor:pointer}' +
+'button:disabled{opacity:.6;cursor:default}' +
+'.err{color:var(--bad);font-size:13px;margin-top:12px;text-align:center;min-height:16px}' +
+'</style></head><body>' +
+'<div class="card">' +
+'<div class="brand">Magic Reel<span class="dot">.</span></div>' +
+'<p class="sub">Enter your password to continue.</p>' +
+'<label for="pw">Password</label>' +
+'<input id="pw" type="password" autocomplete="current-password" autofocus>' +
+'<button id="go">Sign in</button>' +
+'<div class="err" id="err"></div>' +
+'</div>' +
+'<script>' +
+'var pw=document.getElementById("pw"),go=document.getElementById("go"),err=document.getElementById("err");' +
+'function submit(){var v=pw.value;if(!v){pw.classList.add("bad");return;}go.disabled=true;err.textContent="";pw.classList.remove("bad");' +
+'fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:v})})' +
+'.then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})' +
+'.then(function(o){if(o.ok){location.href="/";}else{go.disabled=false;err.textContent=(o.j&&o.j.error)||"Incorrect password.";pw.classList.add("bad");pw.focus();pw.select();}})' +
+'.catch(function(){go.disabled=false;err.textContent="Something went wrong. Try again.";});}' +
+'go.addEventListener("click",submit);' +
+'pw.addEventListener("keydown",function(e){if(e.key==="Enter")submit();});' +
+'pw.addEventListener("input",function(){pw.classList.remove("bad");err.textContent="";});' +
+'</scr' + 'ipt></body></html>';
 
 // Magic Reel's own table — prefixed reel_ so it can never collide with Magic Story Maker's tables.
 async function ensureSchema() {
@@ -187,13 +242,31 @@ function publicSend(r) {
 }
 
 app.use(express.json());
-app.get(['/dashboard', '/dashboard.html'], requireDashboardAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+app.use(gate);
 app.use(express.static(path.join(__dirname, 'public')));
+
+// --- auth (exempt from the gate) ---
+app.get('/login', (req, res) => {
+  if (!DASHBOARD_PASSWORD || isAuthed(req)) return res.redirect('/');
+  res.type('html').send(LOGIN_HTML);
+});
+app.post('/api/login', (req, res) => {
+  if (!DASHBOARD_PASSWORD) return res.json({ ok: true });
+  const pw = (req.body && req.body.password) || '';
+  if (pw !== DASHBOARD_PASSWORD) return res.status(401).json({ error: 'Incorrect password.' });
+  const secure = (req.headers['x-forwarded-proto'] === 'https' || req.secure) ? '; Secure' : '';
+  res.setHeader('Set-Cookie', AUTH_COOKIE + '=' + authToken() + '; HttpOnly; Path=/; Max-Age=' + (60 * 60 * 24 * 30) + '; SameSite=Lax' + secure);
+  res.json({ ok: true });
+});
+app.get('/logout', (req, res) => {
+  res.setHeader('Set-Cookie', AUTH_COOKIE + '=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax');
+  res.redirect('/login');
+});
 
 // --- pages ---
 //  /            -> filmmaker send screen      (public/index.html, served by static)
 //  /dashboard   -> the activity dashboard
-//  /r/:token    -> a recipient's private preview link (token wiring comes later)
+//  /r/:token    -> a recipient's private preview link
 app.get('/dashboard', (req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
@@ -216,7 +289,7 @@ app.get('/health', async (req, res) => {
 app.get('/version', (req, res) => res.json({ version: APP_VERSION }));
 
 // Owner dashboard data: every send you've made, with each recipient's usage + status.
-app.get('/api/dashboard', requireDashboardAuth, async (req, res) => {
+app.get('/api/dashboard', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
   try {
     const sends = await pool.query('SELECT id, film_name, status, duration, created_at FROM reel_sends ORDER BY created_at DESC');
@@ -244,6 +317,49 @@ app.get('/api/dashboard', requireDashboardAuth, async (req, res) => {
 // --- Milestone 2: real video via Mux ---
 
 // Create a Mux direct-upload URL and a matching send record.
+// Your cast/crew + projects, read live from Magic Story Maker's shared database.
+// MSM stores them as JSON rows in the kv table: the owner's people under key "people",
+// scripts/projects under "library" (each project's castings link people to roles).
+// Read-only — Magic Reel only ever writes its own reel_ tables.
+function kvVal(rows, fb) {
+  if (!rows.length) return fb;
+  const v = rows[0].value;
+  if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return fb; } }
+  return v == null ? fb : v;
+}
+app.get('/api/roster', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const pe = await pool.query("SELECT value FROM kv WHERE key = 'people'");
+    const li = await pool.query("SELECT value FROM kv WHERE key = 'library'");
+    const peopleRaw = kvVal(pe.rows, []);
+    const libraryRaw = kvVal(li.rows, []);
+    const people = (Array.isArray(peopleRaw) ? peopleRaw : []).map(function (p) {
+      return {
+        id: p.id, name: p.name || '', kind: p.kind === 'crew' ? 'crew' : 'cast',
+        email: (p.contact && p.contact.email) || '',
+        phone: (p.contact && p.contact.phone) || ''
+      };
+    }).filter(function (p) { return p.id && p.name; });
+    const byId = {}; people.forEach(function (p) { byId[p.id] = p; });
+    const projects = (Array.isArray(libraryRaw) ? libraryRaw : [])
+      .filter(function (it) { return it && it.id && !it.archived; })
+      .map(function (it) {
+        const members = (Array.isArray(it.castings) ? it.castings : [])
+          .map(function (c) {
+            const p = byId[c.personId];
+            return p ? { id: p.id, name: p.name, email: p.email, phone: p.phone, kind: p.kind, role: c.roleKey || '' } : null;
+          })
+          .filter(Boolean);
+        return { id: it.id, title: it.title || 'Untitled', members: members };
+      })
+      .filter(function (pr) { return pr.members.length; });
+    res.json({ people: people, projects: projects });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/uploads', async (req, res) => {
   if (!muxConfigured()) return res.status(503).json({ error: 'Mux is not configured yet (set MUX_TOKEN_ID and MUX_TOKEN_SECRET).' });
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet (set DATABASE_URL).' });

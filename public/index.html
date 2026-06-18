@@ -289,7 +289,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.5.3 &mdash; &#128274; Signed preview fix</footer>
+  <footer class="ver">Magic Reel &middot; v0.8.0 &mdash; &#128279; Roster: live MSM cast &amp; crew</footer>
 </div>
 
 <div class="bar">
@@ -325,26 +325,9 @@
   function initials(n){return n.split(' ').filter(Boolean).slice(0,2).map(function(w){return w[0];}).join('').toUpperCase();}
   function emailFor(n){return n.toLowerCase().replace(/[^a-z ]/g,'').trim().replace(/\s+/g,'.')+'@email.com';}
 
-  var PEOPLE={
-    vance:{name:'Eleanor Vance',phone:'(310) 555-0142'}, brooks:{name:'Theodore Brooks',phone:'(323) 555-0119'},
-    adeyemi:{name:'Junior Adeyemi',phone:'(213) 555-0188'}, hale:{name:'Marcus Hale',phone:'(424) 555-0173'},
-    bello_a:{name:'Aisha Bello',phone:'(310) 555-0150'}, liu:{name:'Wenjie Liu',phone:'(323) 555-0166'},
-    marchetti:{name:'Sofia Marchetti',phone:'(213) 555-0102'}, okonkwo:{name:'Maya Okonkwo',phone:'(310) 555-0131'},
-    rivera:{name:'Sam Rivera',phone:'(424) 555-0145'}, nair:{name:'Priya Nair',phone:'(323) 555-0177'},
-    cho:{name:'Daniel Cho',phone:'(213) 555-0190'}, bello_g:{name:'Grace Bello',phone:'(310) 555-0124'},
-    stein:{name:'Leah Stein',phone:'(424) 555-0158'}, watanabe:{name:'Kenji Watanabe',phone:'(323) 555-0136'}
-  };
-  var PROJECTS=[
-    {id:'lighthouse',title:'The Lighthouse Keeper',meta:'14:32',
-      cast:[{p:'vance',role:'Mara'},{p:'brooks',role:'The Keeper'},{p:'adeyemi',role:'Young Sailor'}],
-      crew:[{p:'okonkwo',role:'Director of Photography'},{p:'rivera',role:'Sound Recordist'},{p:'nair',role:'Gaffer'},{p:'cho',role:'1st AC'},{p:'bello_g',role:'Production Designer'}]},
-    {id:'tuesday',title:"Tuesday's Gone",meta:'9:48',
-      cast:[{p:'vance',role:'Diner Waitress'},{p:'hale',role:'The Driver'}],
-      crew:[{p:'okonkwo',role:'Director of Photography'},{p:'stein',role:'Editor'},{p:'rivera',role:'Sound Recordist'}]},
-    {id:'inheritance',title:'The Inheritance',meta:'22:10',
-      cast:[{p:'bello_a',role:'Nadia'},{p:'brooks',role:'The Father'},{p:'liu',role:'The Brother'},{p:'marchetti',role:'The Lawyer'}],
-      crew:[{p:'watanabe',role:'Director of Photography'},{p:'nair',role:'Gaffer'},{p:'rivera',role:'Sound Recordist'}]}
-  ];
+  // Populated live from your Magic Story Maker roster via /api/roster (see loadRoster).
+  var PEOPLE={};   // { personId: { name, email, phone, kind } }
+  var PROJECTS=[]; // { id, title, meta, cast:[{p,role}], crew:[{p,role}] }
   function projectsForPerson(pid){var o=[];PROJECTS.forEach(function(pr){if(pr.cast.concat(pr.crew).some(function(m){return m.p===pid;}))o.push(pr.title);});return o;}
 
   /* ---- recipients model ---- */
@@ -354,7 +337,7 @@
   function effCap(rec){return rec.override!=null?rec.override:state.globalCap;}
   function findByPid(pid){for(var i=0;i<state.recipients.length;i++){var r=state.recipients[i];if(r.kind==='person'&&r.pid===pid)return r;}return null;}
   function idxById(id){for(var i=0;i<state.recipients.length;i++){if(state.recipients[i].id===id)return i;}return -1;}
-  function addPerson(pid,role){if(findByPid(pid))return;state.recipients.push({id:'p:'+pid,kind:'person',pid:pid,name:PEOPLE[pid].name,email:emailFor(PEOPLE[pid].name),role:role||'',override:null});}
+  function addPerson(pid,role){if(findByPid(pid))return;var P=PEOPLE[pid]||{};state.recipients.push({id:'p:'+pid,kind:'person',pid:pid,name:P.name||'',email:P.email||'',role:role||'',override:null});}
   function removeById(id){var i=idxById(id);if(i>=0)state.recipients.splice(i,1);}
   function togglePerson(pid,role){var r=findByPid(pid);if(r)removeById(r.id);else addPerson(pid,role);}
   function validEmail(e){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((e||'').trim());}
@@ -445,13 +428,15 @@
     else if(state.src==='database')renderRoster();
   });
 
-  // Option A: only the "Someone new" path is wired for now — the project & roster
-  // pulls return in M4 once your real cast/crew roster exists. Hide the other sources.
-  seg.style.display='none';
+  // Project + roster tabs pull your real cast & crew live from Magic Story Maker
+  // (the shared database). "Someone new" always works on its own. Default to My people.
+  state.src='database';
+  Array.prototype.forEach.call(seg.children,function(c){c.classList.toggle('on',c.dataset.src==='database');});
   $('srcProject').classList.add('hidden');
-  $('srcDatabase').classList.add('hidden');
-  $('srcCustom').classList.remove('hidden');
-  state.src='custom';
+  $('srcDatabase').classList.remove('hidden');
+  $('srcCustom').classList.add('hidden');
+  $('rosterList').innerHTML=emptyBlock('Loading your people\u2026');
+  loadRoster();
 
   /* ---- shared picker row ---- */
   var pickRowEls={};
@@ -470,7 +455,22 @@
 
   /* ---- project source ---- */
   var projsel=$('projsel'),projPick=$('projPick');
-  PROJECTS.forEach(function(pr){var o=document.createElement('option');o.value=pr.id;o.textContent=pr.title+'  \u00b7  '+pr.meta;projsel.appendChild(o);});
+  function populateProjSel(){
+    projsel.innerHTML='<option value="">Choose a project\u2026</option>';
+    PROJECTS.forEach(function(pr){var o=document.createElement('option');o.value=pr.id;o.textContent=pr.title;projsel.appendChild(o);});
+    projsel.disabled=!PROJECTS.length;
+  }
+  function loadRoster(){
+    fetch('/api/roster').then(function(r){return r.ok?r.json():Promise.reject();}).then(function(j){
+      var pe=(j&&j.people)||[],pj=(j&&j.projects)||[];
+      PEOPLE={};pe.forEach(function(p){PEOPLE[p.id]={name:p.name,email:p.email,phone:p.phone,kind:p.kind};});
+      PROJECTS=pj.map(function(P){var cast=[],crew=[];(P.members||[]).forEach(function(m){(m.kind==='crew'?crew:cast).push({p:m.id,role:m.role});});return {id:P.id,title:P.title,meta:'',cast:cast,crew:crew};});
+      populateProjSel();
+      if(state.src==='database')renderRoster();else if(state.src==='project')renderProjPick();
+    }).catch(function(){
+      if(state.src==='database')$('rosterList').innerHTML=emptyBlock('Couldn\u2019t load your people. Refresh to try again.');
+    });
+  }
   projsel.addEventListener('change',function(){state.projectId=projsel.value;renderProjPick();});
   function groupBlock(label,members){
     var wrap=document.createElement('div');wrap.className='group';
@@ -487,10 +487,11 @@
   }
   function renderProjPick(){
     pickRowEls={};projPick.innerHTML='';
+    if(!PROJECTS.length){projPick.innerHTML=emptyBlock('No projects with assigned cast or crew yet. Assign people to a project in Magic Story Maker, or use the other tabs.');return;}
     var pr=PROJECTS.filter(function(x){return x.id===state.projectId;})[0];
     if(!pr){projPick.innerHTML=emptyBlock('Pick a project to add its cast and crew.');return;}
-    projPick.appendChild(groupBlock('Cast',pr.cast));
-    projPick.appendChild(groupBlock('Crew',pr.crew));
+    if(pr.cast.length)projPick.appendChild(groupBlock('Cast',pr.cast));
+    if(pr.crew.length)projPick.appendChild(groupBlock('Crew',pr.crew));
   }
 
   /* ---- my-people (roster) source ---- */
@@ -566,9 +567,9 @@
     var sub=isP?(rec.role||'In your database'):'Custom recipient';
     var capSel='<select class="msm" id="capSel"><option value="">Match default ('+fmt(state.globalCap)+')</option>'+CAP_OPTS.map(function(s){return '<option value="'+s+'"'+(rec.override===s?' selected':'')+'>'+fmt(s)+'</option>';}).join('')+'</select>';
     var body='<div class="frow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg><span>'+esc(rec.email)+'</span></div>';
-    if(isP)body+='<div class="frow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg><span>'+PEOPLE[rec.pid].phone+'</span></div>';
+    if(isP&&PEOPLE[rec.pid]&&PEOPLE[rec.pid].phone)body+='<div class="frow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg><span>'+esc(PEOPLE[rec.pid].phone)+'</span></div>';
     body+='<div class="fsec">Reel length for this person</div><div class="caprow"><div class="ct">Download cap<small>Overrides the default for '+esc(rec.name.split(' ')[0])+'</small></div>'+capSel+'</div>';
-    if(isP){var projs=projectsForPerson(rec.pid);body+='<div class="fsec">Worked on '+projs.length+' of your projects</div><div class="chips">'+projs.map(function(t){return '<span class="chip">'+esc(t)+'</span>';}).join('')+'</div>';}
+    if(isP){var projs=projectsForPerson(rec.pid);if(projs.length)body+='<div class="fsec">Worked on '+projs.length+' of your projects</div><div class="chips">'+projs.map(function(t){return '<span class="chip">'+esc(t)+'</span>';}).join('')+'</div>';}
     else body+='<div class="fsec">Not in your database</div><p style="font-size:12.5px;color:var(--text-soft);margin:0">Typed in for this send only.</p>';
     profileSheet.innerHTML='<div class="sheet-top"><div class="ava" style="background:'+col+'">'+initials(rec.name)+'</div><div class="who"><h4>'+esc(rec.name)+'</h4><span>'+esc(sub)+'</span></div></div><div class="sheet-body">'+body+'</div><button class="sheet-close" id="closeProfile">Close</button>';
     profileScrim.classList.add('show');
