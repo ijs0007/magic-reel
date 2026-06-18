@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.4.2 — 📧 Recipients carry email';
+const APP_VERSION = 'v0.5.0 — 📧 Auto-email: Resend reel links';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,6 +66,41 @@ async function muxFetch(p, opts) {
     const err = new Error(m); err.status = res.status; throw err;
   }
   return json.data;
+}
+
+// --- Email (Resend REST API) — reuses MSM's env var names so the same values work.
+//     Silently no-ops if not configured, exactly like MSM. ---
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const CALLSHEET_FROM = process.env.CALLSHEET_FROM || ''; // e.g. "Isaiah Smith <you@isaiahsmithfilms.com>"
+function resendConfigured() { return !!(RESEND_API_KEY && CALLSHEET_FROM); }
+function fmtClock(s) { s = Math.max(0, Math.round(Number(s) || 0)); const m = Math.floor(s / 60), ss = s % 60; return m + ':' + (ss < 10 ? '0' : '') + ss; }
+function emailEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+async function sendReelEmail(to, name, link, filmName, budgetSeconds) {
+  if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
+  to = String(to || '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return { ok: false, reason: 'no-recipient' };
+  const namedFilm = filmName && filmName !== 'Untitled';
+  const filmPhrase = namedFilm ? '\u201c' + emailEsc(filmName) + '\u201d' : 'a film';
+  const cap = fmtClock(budgetSeconds);
+  const html =
+    '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.6;max-width:520px;margin:0 auto;">' +
+    '<p style="font-size:16px;margin:0 0 14px;">Hi ' + emailEsc(name || 'there') + ',</p>' +
+    '<p style="margin:0 0 14px;">You\u2019ve been sent footage from ' + filmPhrase + ' to build your reel. Open your private link, scrub the preview, mark the moments you want (up to <strong>' + cap + '</strong>), and download a clean, watermark-free cut of your selections.</p>' +
+    '<p style="margin:26px 0;"><a href="' + link + '" style="background:#7c4dff;color:#fff;text-decoration:none;font-weight:600;padding:13px 22px;border-radius:10px;display:inline-block;">Open your reel</a></p>' +
+    '<p style="color:#777;font-size:13px;margin:0 0 4px;">Or paste this into your browser:</p>' +
+    '<p style="color:#7c4dff;word-break:break-all;font-size:13px;margin:0;">' + emailEsc(link) + '</p>' +
+    '<p style="color:#999;font-size:12px;margin-top:26px;">This link is just for you \u2014 please don\u2019t share it.</p>' +
+    '</div>';
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Pick your reel selects \u2014 ' + (namedFilm ? filmName : 'your footage'), html })
+    });
+    if (!r.ok) { const d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
+    return { ok: true };
+  } catch (e) { return { ok: false, reason: 'exception', detail: e.message }; }
 }
 
 // Magic Reel's own table — prefixed reel_ so it can never collide with Magic Story Maker's tables.
@@ -115,7 +150,7 @@ app.get('/r/:token?', (req, res) =>
 
 // --- health check: confirms the service is up and the database is reachable ---
 app.get('/health', async (req, res) => {
-  const base = { ok: true, version: APP_VERSION, mux: muxConfigured(), ffmpeg: !!ffmpegPath };
+  const base = { ok: true, version: APP_VERSION, mux: muxConfigured(), ffmpeg: !!ffmpegPath, resend: resendConfigured() };
   if (!pool) return res.json(Object.assign(base, { db: 'not configured' }));
   try {
     const r = await pool.query('SELECT now() AS now');
@@ -483,12 +518,20 @@ app.post('/api/recipients', async (req, res) => {
     let budget = parseInt(b.budgetSeconds, 10);
     if (!isFinite(budget) || budget <= 0) budget = 120;
     budget = Math.min(budget, MAX_CUT_SECONDS);
-    const s = await pool.query('SELECT id FROM reel_sends WHERE id = $1', [b.sendId]);
+    const s = await pool.query('SELECT id, film_name FROM reel_sends WHERE id = $1', [b.sendId]);
     if (!s.rows.length) return res.status(404).json({ error: 'No such send.' });
     const token = genToken();
     await pool.query('INSERT INTO reel_recipients (token, send_id, name, email, budget_seconds) VALUES ($1, $2, $3, $4, $5)',
       [token, b.sendId, name, email, budget]);
-    res.json({ token: token, link: '/r/' + token, name: name, email: email, budgetSeconds: budget });
+    // Email the link only on an explicit notify (so test mints never fire mail).
+    let emailed = false;
+    if (b.notify === true && email && resendConfigured()) {
+      const base = (req.headers.origin && /^https?:\/\//.test(req.headers.origin)) ? req.headers.origin : ('https://' + (req.headers.host || ''));
+      const out = await sendReelEmail(email, name, base + '/r/' + token, s.rows[0].film_name, budget);
+      emailed = !!(out && out.ok);
+      if (!emailed) console.warn('[reel-email] not sent to', email, '-', out && out.reason, out && out.detail ? ('(' + out.detail + ')') : '');
+    }
+    res.json({ token: token, link: '/r/' + token, name: name, email: email, budgetSeconds: budget, emailed: emailed });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -591,7 +634,7 @@ function sweepStaleCuts() {
 // Exposed for logic tests (see test_helpers.js).
 module.exports = {
   sanitizeClips, sumSeconds, clipCreateBody, pickReadyMp4, concatLooksCorrect,
-  genToken, withinBudget,
+  genToken, withinBudget, fmtClock, emailEsc,
   safeFilename, muxDownloadUrl, concatListText, parseFfmpegDuration, round2,
   MIN_CLIP_SECONDS, MAX_CUT_SECONDS, MAX_RANGES, APP_VERSION
 };

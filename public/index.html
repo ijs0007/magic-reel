@@ -208,6 +208,7 @@
   .cpbtn:hover{border-color:var(--accent);color:var(--accent)}
   .cpbtn svg{width:13px;height:13px}
   .cpbtn.copied{border-color:var(--good);color:var(--good)}
+  .sentlist .sr .nm .emailed{display:inline-block;margin-left:7px;font-size:9.5px;font-weight:600;color:var(--good);border:1px solid var(--good);border-radius:999px;padding:0 6px;vertical-align:middle;letter-spacing:.02em}
 </style>
 </head>
 <body class="dark">
@@ -287,7 +288,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.5 &mdash; &#128231; Send: real private links per person</footer>
+  <footer class="ver">Magic Reel &middot; v0.5.1 &mdash; &#128231; Auto-email reel links</footer>
 </div>
 
 <div class="bar">
@@ -581,17 +582,24 @@
   }
   function fallbackCopy(text){try{var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');document.body.removeChild(ta);}catch(e){}}
   function renderResults(results,errors){
+    var allEmailed=results.length>0&&results.every(function(r){return r.emailed;});
+    var anyEmailed=results.some(function(r){return r.emailed;});
     var list='<div class="sentlist">';
     results.forEach(function(r){var col=r.rec.kind==='person'?avaColor(r.rec.pid):avaColor(r.rec.id);
+      var sent=r.emailed?'<span class="emailed">Emailed</span>':'';
       list+='<div class="sr"><div class="ava" style="background:'+col+'">'+initials(r.rec.name)+'</div>'+
-        '<div class="si"><div class="nm">'+esc(r.rec.name)+'</div><div class="em">'+esc(r.rec.email)+' \u00b7 '+fmt(effCap(r.rec))+'</div><div class="lk">'+esc(r.url)+'</div></div>'+
+        '<div class="si"><div class="nm">'+esc(r.rec.name)+sent+'</div><div class="em">'+esc(r.rec.email)+' \u00b7 '+fmt(effCap(r.rec))+'</div><div class="lk">'+esc(r.url)+'</div></div>'+
         '<button class="cpbtn" data-url="'+esc(r.url)+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button></div>';
     });
     list+='</div>';
     var errHTML=errors.length?('<p class="note2" style="color:var(--err)">Couldn\u2019t create '+errors.length+' ('+errors.map(function(e){return esc(e.name);}).join(', ')+') \u2014 try Send again.</p>'):'';
-    var head=results.length
-      ?'<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Private links ready</h3><p class="lede">Copy each link and send it to the person. Automatic email is coming next.</p>'
-      :'<h3>No links created</h3><p class="lede">Something went wrong creating the links.</p>';
+    var lede;
+    if(!results.length) lede='Something went wrong creating the links.';
+    else if(allEmailed) lede='Each person got an email with their private link. The links are below too, just in case.';
+    else if(anyEmailed) lede='Some were emailed automatically; copy and send the rest below.';
+    else lede='Copy each link and send it to the person. (Auto-email turns on once your Resend key is set.)';
+    var title=!results.length?'No links created':(allEmailed?'Links sent':'Private links ready');
+    var head=(results.length?'<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>':'')+'<h3>'+title+'</h3><p class="lede">'+lede+'</p>';
     processModal.innerHTML=head+(results.length?list:'')+errHTML+'<button class="modalbtn" id="sendAnother">Done</button>';
     Array.prototype.forEach.call(processModal.querySelectorAll('.cpbtn'),function(btn){
       btn.addEventListener('click',function(){var u=btn.getAttribute('data-url');var old=btn.innerHTML;
@@ -614,9 +622,9 @@
     processScrim.classList.add('show'); renderMinting();
     var chain=Promise.resolve();
     recs.forEach(function(rec){ chain=chain.then(function(){
-      return fetch('/api/recipients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sendId:sendId,name:rec.name,email:rec.email,budgetSeconds:effCap(rec)})})
+      return fetch('/api/recipients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sendId:sendId,name:rec.name,email:rec.email,budgetSeconds:effCap(rec),notify:true})})
         .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
-        .then(function(res){ if(res.ok&&res.j.token){ results.push({rec:rec,url:location.origin+'/r/'+res.j.token}); } else { errors.push({name:rec.name}); } })
+        .then(function(res){ if(res.ok&&res.j.token){ results.push({rec:rec,url:location.origin+'/r/'+res.j.token,emailed:!!res.j.emailed}); } else { errors.push({name:rec.name}); } })
         .catch(function(){ errors.push({name:rec.name}); });
     });});
     chain.then(function(){ renderResults(results,errors); });
