@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.5.0 — 📧 Auto-email: Resend reel links';
+const APP_VERSION = 'v0.6.0 — ⏳ Metered links: budget that runs out';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -125,11 +125,13 @@ async function ensureSchema() {
     ' name TEXT,' +
     ' email TEXT,' +
     ' budget_seconds INTEGER NOT NULL DEFAULT 120,' +
+    ' used_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,' +
     ' created_at TIMESTAMPTZ NOT NULL DEFAULT now()' +
     ')'
   );
-  // migrate older reel_recipients tables that predate the email column
+  // migrate older reel_recipients tables that predate these columns
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS email TEXT');
+  await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS used_seconds DOUBLE PRECISION NOT NULL DEFAULT 0');
 }
 function publicSend(r) {
   return { sendId: r.id, filmName: r.film_name, status: r.status, playbackId: r.playback_id, duration: r.duration };
@@ -457,6 +459,8 @@ async function processReelViaMux(jobId, masterAssetId, clips, filmName) {
     job.phase = 'ready'; job.status = 'ready';
   } catch (e) {
     job.status = 'error'; job.phase = 'error'; job.error = e.message;
+    // refund the reserved allowance — a failed cut shouldn't cost the recipient
+    if (job.meter && pool) pool.query('UPDATE reel_recipients SET used_seconds = GREATEST(0, used_seconds - $1) WHERE token = $2', [job.meter.charged, job.meter.token]).catch(function () {});
     deleteClipAssets(job);
     cleanupTmp(job);
   }
@@ -497,11 +501,16 @@ function genToken() { return crypto.randomBytes(18).toString('base64url'); } // 
 function withinBudget(clips, budgetSeconds) {
   return sumSeconds(clips) <= budgetSeconds + 0.05; // small epsilon for float rounding
 }
+// Metered allowance: a cut is allowed only if it fits what's LEFT (budget minus already used).
+function meterCheck(totalSeconds, budgetSeconds, usedSeconds) {
+  const remaining = budgetSeconds - (Number(usedSeconds) || 0);
+  return { ok: totalSeconds <= remaining + 0.05, remaining: Math.max(0, remaining) };
+}
 
 // Start a cut job from a ready send row. Shared by the recipient cut endpoint.
-function startCutJob(send, clips) {
+function startCutJob(send, clips, meter) {
   const jobId = crypto.randomUUID();
-  cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: send.film_name, createdAt: Date.now() });
+  cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: send.film_name, createdAt: Date.now(), meter: meter || null });
   processReelViaMux(jobId, send.asset_id, clips, send.film_name);
   return jobId;
 }
@@ -542,14 +551,15 @@ app.get('/api/r/:token', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
   try {
     const r = await pool.query(
-      'SELECT rec.name, rec.budget_seconds, s.film_name, s.playback_id, s.duration, s.status' +
+      'SELECT rec.name, rec.budget_seconds, rec.used_seconds, s.film_name, s.playback_id, s.duration, s.status' +
       ' FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
       [req.params.token]);
     if (!r.rows.length) return res.status(404).json({ error: 'This link is not valid.' });
     const row = r.rows[0];
     res.json({
       name: row.name, filmName: row.film_name, playbackId: row.playback_id,
-      duration: row.duration, budgetSeconds: row.budget_seconds, status: row.status
+      duration: row.duration, budgetSeconds: row.budget_seconds,
+      usedSeconds: Number(row.used_seconds) || 0, status: row.status
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -563,7 +573,7 @@ app.post('/api/r/:token/cut', async (req, res) => {
   if (!ffmpegPath) return res.status(503).json({ error: 'FFmpeg is not available on the server.' });
   try {
     const r = await pool.query(
-      'SELECT rec.budget_seconds, s.* FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
+      'SELECT rec.budget_seconds, rec.used_seconds, s.* FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
       [req.params.token]);
     if (!r.rows.length) return res.status(404).json({ error: 'This link is not valid.' });
     const row = r.rows[0];
@@ -573,11 +583,19 @@ app.post('/api/r/:token/cut', async (req, res) => {
     if (!clips) return res.status(400).json({ error: 'No valid selections — each must be at least 0.5 seconds.' });
     if (clips.length > MAX_RANGES) return res.status(400).json({ error: 'Too many separate selections (max ' + MAX_RANGES + ').' });
     const total = sumSeconds(clips);
-    if (!withinBudget(clips, row.budget_seconds)) {
-      return res.status(403).json({ error: 'Over your reel budget — that\u2019s ' + Math.round(total) + 's of a ' + row.budget_seconds + 's limit.' });
+    const gate = meterCheck(total, row.budget_seconds, row.used_seconds);
+    if (!gate.ok) {
+      return res.status(403).json({
+        error: gate.remaining <= 0.05
+          ? 'This link has used its full ' + row.budget_seconds + 's allowance.'
+          : 'That selection is ' + Math.round(total) + 's, but only ' + Math.round(gate.remaining) + 's are left on this link.',
+        remainingSeconds: gate.remaining
+      });
     }
     if (total > MAX_CUT_SECONDS) return res.status(400).json({ error: 'That selection is too long.' });
-    res.json({ jobId: startCutJob(row, clips) });
+    // Reserve the seconds now (refunded automatically if the cut fails on Mux).
+    await pool.query('UPDATE reel_recipients SET used_seconds = used_seconds + $1 WHERE token = $2', [total, req.params.token]);
+    res.json({ jobId: startCutJob(row, clips, { token: req.params.token, charged: total }), remainingSeconds: Math.max(0, gate.remaining - total) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -634,7 +652,7 @@ function sweepStaleCuts() {
 // Exposed for logic tests (see test_helpers.js).
 module.exports = {
   sanitizeClips, sumSeconds, clipCreateBody, pickReadyMp4, concatLooksCorrect,
-  genToken, withinBudget, fmtClock, emailEsc,
+  genToken, withinBudget, meterCheck, fmtClock, emailEsc,
   safeFilename, muxDownloadUrl, concatListText, parseFfmpegDuration, round2,
   MIN_CLIP_SECONDS, MAX_CUT_SECONDS, MAX_RANGES, APP_VERSION
 };

@@ -215,7 +215,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.6.7 &mdash; &#128273; Private link: token + your budget</footer>
+  <footer class="ver">Magic Reel &middot; v0.6.8 &mdash; &#9203; Metered: your balance ticks down</footer>
 </div>
 
 <div class="bar">
@@ -230,7 +230,7 @@
 <script>
 (function(){
   "use strict";
-  var CTX={name:'Eleanor Vance',sender:'Isaiah Smith',film:'The Lighthouse Keeper',duration:872,budget:120,ready:false};
+  var CTX={name:'Eleanor Vance',sender:'Isaiah Smith',film:'The Lighthouse Keeper',duration:872,budget:120,ready:false,used:0};
   var TOKEN=(location.pathname.match(/^\/r\/([^\/?#]+)/)||[])[1]||null;
   var $=function(id){return document.getElementById(id);};
   function fmt(s){s=Math.max(0,Math.round(s));var m=Math.floor(s/60),ss=s%60;return m+':'+(ss<10?'0':'')+ss;}
@@ -287,6 +287,7 @@
   function applyRecipient(j){
     CTX.name=j.name||CTX.name; CTX.film=j.filmName||CTX.film;
     if(typeof j.budgetSeconds==='number') CTX.budget=j.budgetSeconds;
+    if(typeof j.usedSeconds==='number') CTX.used=j.usedSeconds;
     $('grName').textContent=CTX.name; $('grAva').textContent=initials(CTX.name);
     $('grFilm').textContent=CTX.film;
     $('grCap').textContent=CTX.sender.split(' ')[0]+' set your reel length to '+fmt(CTX.budget);
@@ -317,7 +318,8 @@
   }
 
   function used(){return st.segments.reduce(function(a,s){return a+(s.out-s.in);},0);}
-  function remaining(){return CTX.budget-used();}
+  function spendable(){return Math.max(0,CTX.budget-(CTX.used||0));}
+  function remaining(){return spendable()-used();}
   function updateMarkers(){
     var mi=$('mkIn'),mo=$('mkOut'),rg=$('range');
     if(st.markIn!=null){mi.style.display='';mi.style.left=pct(st.markIn)+'%';$('inLt').textContent=fmt(st.markIn);$('markInBtn').classList.add('set');}else{mi.style.display='none';$('inLt').textContent='\u2014';$('markInBtn').classList.remove('set');}
@@ -327,6 +329,7 @@
   }
   function updateCandidate(){
     var c=$('cand'),add=$('addBtn');c.className='candidate';add.disabled=true;
+    if(spendable()<=0.05){c.className='candidate warn';c.innerHTML='You\u2019ve used your full <b>'+fmt(CTX.budget)+'</b> on this link \u2014 nothing more can be downloaded.';return;}
     if(st.markIn==null){c.textContent='Mark an In point to start a clip.';return;}
     if(st.markOut==null){c.innerHTML='In set at <b>'+fmt(st.markIn)+'</b> \u2014 now scrub forward and Mark Out.';return;}
     if(st.markOut<=st.markIn){c.className='candidate warn';c.textContent='Out must come after In. Scrub past your In point.';return;}
@@ -353,11 +356,12 @@
     });
   }
   function renderBudget(){
-    var u=used(),rem=remaining(),p=u/CTX.budget*100;
-    $('usedTxt').textContent=fmt(u)+' used';$('capTxt').textContent=fmt(rem)+' left of '+fmt(CTX.budget);
-    $('fill').style.width=Math.min(100,p)+'%';$('fill').classList.toggle('full',rem<=10);
+    var u=used(),sp=spendable(),rem=Math.max(0,sp-u),committed=(CTX.used||0)+u,p=committed/CTX.budget*100;
+    $('usedTxt').textContent=u>0?(fmt(u)+' in this reel'):'Nothing selected yet';
+    $('capTxt').textContent=fmt(rem)+' left of '+fmt(CTX.budget)+((CTX.used||0)>0.05?(' \u00b7 '+fmt(CTX.used)+' downloaded'):'');
+    $('fill').style.width=Math.min(100,p)+'%';$('fill').classList.toggle('full',rem<=Math.min(10,CTX.budget*0.1));
     var n=st.segments.length;$('barBig').textContent=n?(n+' '+(n===1?'clip':'clips')+' \u00b7 '+fmt(u)):'No clips yet';
-    $('barFill').style.width=Math.min(100,p)+'%';$('dlBtn').disabled=n===0;updateCandidate();
+    $('barFill').style.width=Math.min(100,p)+'%';$('dlBtn').disabled=(n===0)||(sp<=0.05);updateCandidate();
   }
 
   var dlScrim=$('dlScrim'),dlModal=$('dlModal'),cutPoll=null;
@@ -392,6 +396,10 @@
     dlModal.innerHTML='<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Your reel is ready</h3><p class="lede">Clean, no watermark \u2014 cut from the master.</p><div class="summary"><div class="row"><span class="k">Clips</span><span class="v">'+n+'</span></div><div class="row"><span class="k">Total length</span><span class="v">'+fmt(u)+'</span></div><div class="row"><span class="k">Quality</span><span class="v">Up to source</span></div><div class="row"><span class="k">Watermark</span><span class="v">None</span></div></div><button class="modalbtn" id="saveBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>Save to device</button><button class="modalghost" id="closeDl">Back to selecting</button>';
     $('saveBtn').addEventListener('click',function(){var a=document.createElement('a');a.href='/api/cuts/'+jobId+'/download';a.download='';document.body.appendChild(a);a.click();a.remove();});
     $('closeDl').addEventListener('click',function(){dlScrim.classList.remove('show');});
+    // metered: those seconds are now spent — fold them into the running total and reset the selection
+    st.segments=[]; st.markIn=null; st.markOut=null;
+    if(TOKEN && typeof st.pendingRemaining==='number'){ CTX.used=Math.max(0,CTX.budget-st.pendingRemaining); st.pendingRemaining=null; }
+    updateMarkers(); renderSegments(); renderBudget();
   }
   function pollCut(jobId){
     clearTimeout(cutPoll);
@@ -409,7 +417,7 @@
     var cutUrl=TOKEN?('/api/r/'+encodeURIComponent(TOKEN)+'/cut'):('/api/sends/'+CTX.sendId+'/cut');
     fetch(cutUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clips:st.segments.map(function(s){return [s.in,s.out];})})})
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
-      .then(function(res){ if(!res.ok){ renderErr(res.j.error||'Server error.'); return; } pollCut(res.j.jobId); })
+      .then(function(res){ if(!res.ok){ if(typeof res.j.remainingSeconds==='number'){ CTX.used=Math.max(0,CTX.budget-res.j.remainingSeconds); renderBudget(); } renderErr(res.j.error||'Server error.'); return; } st.pendingRemaining=(typeof res.j.remainingSeconds==='number')?res.j.remainingSeconds:null; pollCut(res.j.jobId); })
       .catch(function(){ renderErr('Couldn\u2019t reach the server.'); });
   }
   $('dlBtn').addEventListener('click',startCut);
