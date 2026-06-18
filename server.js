@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.3.1 — 🧵 Stitch: clean audio seams';
+const APP_VERSION = 'v0.4.0 — 🔑 Recipients: tokens + budget guard';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -80,6 +80,15 @@ async function ensureSchema() {
     ' playback_id TEXT,' +
     " status TEXT NOT NULL DEFAULT 'created'," +
     ' duration DOUBLE PRECISION,' +
+    ' created_at TIMESTAMPTZ NOT NULL DEFAULT now()' +
+    ')'
+  );
+  await pool.query(
+    'CREATE TABLE IF NOT EXISTS reel_recipients (' +
+    ' token TEXT PRIMARY KEY,' +
+    ' send_id TEXT NOT NULL,' +
+    ' name TEXT,' +
+    ' budget_seconds INTEGER NOT NULL DEFAULT 120,' +
     ' created_at TIMESTAMPTZ NOT NULL DEFAULT now()' +
     ')'
   );
@@ -440,6 +449,93 @@ app.post('/api/sends/:id/cut', async (req, res) => {
   }
 });
 
+// --- M3: per-recipient tokens + server-side budget enforcement ---
+// A recipient is a unique token tied to one send (film) with its own time budget.
+// The page loads via /r/:token; every budget check happens HERE on the server — the
+// client cap is only UX, this is the real chokepoint. (Signed playback + per-person
+// watermark are separate later pieces; this layer is tokens + budget only.)
+
+function genToken() { return crypto.randomBytes(18).toString('base64url'); } // 24 url-safe chars
+function withinBudget(clips, budgetSeconds) {
+  return sumSeconds(clips) <= budgetSeconds + 0.05; // small epsilon for float rounding
+}
+
+// Start a cut job from a ready send row. Shared by the recipient cut endpoint.
+function startCutJob(send, clips) {
+  const jobId = crypto.randomUUID();
+  cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: send.film_name, createdAt: Date.now() });
+  processReelViaMux(jobId, send.asset_id, clips, send.film_name);
+  return jobId;
+}
+
+// Mint a recipient token for a send. DEV/ADMIN for now (no auth) — in M4 this moves
+// into the authenticated send screen. Do not expose this publicly long-term.
+app.post('/api/recipients', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const b = req.body || {};
+    if (!b.sendId) return res.status(400).json({ error: 'sendId is required.' });
+    const name = (typeof b.name === 'string' && b.name.trim()) ? b.name.trim().slice(0, 80) : 'Guest';
+    let budget = parseInt(b.budgetSeconds, 10);
+    if (!isFinite(budget) || budget <= 0) budget = 120;
+    budget = Math.min(budget, MAX_CUT_SECONDS);
+    const s = await pool.query('SELECT id FROM reel_sends WHERE id = $1', [b.sendId]);
+    if (!s.rows.length) return res.status(404).json({ error: 'No such send.' });
+    const token = genToken();
+    await pool.query('INSERT INTO reel_recipients (token, send_id, name, budget_seconds) VALUES ($1, $2, $3, $4)',
+      [token, b.sendId, name, budget]);
+    res.json({ token: token, link: '/r/' + token, name: name, budgetSeconds: budget });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// What the recipient page loads: the film + their personal budget + identity.
+app.get('/api/r/:token', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const r = await pool.query(
+      'SELECT rec.name, rec.budget_seconds, s.film_name, s.playback_id, s.duration, s.status' +
+      ' FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
+      [req.params.token]);
+    if (!r.rows.length) return res.status(404).json({ error: 'This link is not valid.' });
+    const row = r.rows[0];
+    res.json({
+      name: row.name, filmName: row.film_name, playbackId: row.playback_id,
+      duration: row.duration, budgetSeconds: row.budget_seconds, status: row.status
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// The recipient's cut — budget enforced HERE (the real chokepoint), not trusted from the client.
+app.post('/api/r/:token/cut', async (req, res) => {
+  if (!muxConfigured()) return res.status(503).json({ error: 'Mux is not configured yet.' });
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  if (!ffmpegPath) return res.status(503).json({ error: 'FFmpeg is not available on the server.' });
+  try {
+    const r = await pool.query(
+      'SELECT rec.budget_seconds, s.* FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
+      [req.params.token]);
+    if (!r.rows.length) return res.status(404).json({ error: 'This link is not valid.' });
+    const row = r.rows[0];
+    if (row.status !== 'ready') return res.status(409).json({ error: 'This film isn\u2019t ready yet.' });
+    if (!row.asset_id) return res.status(409).json({ error: 'This film has no master asset to cut from yet.' });
+    const clips = sanitizeClips(req.body && req.body.clips, row.duration);
+    if (!clips) return res.status(400).json({ error: 'No valid selections — each must be at least 0.5 seconds.' });
+    if (clips.length > MAX_RANGES) return res.status(400).json({ error: 'Too many separate selections (max ' + MAX_RANGES + ').' });
+    const total = sumSeconds(clips);
+    if (!withinBudget(clips, row.budget_seconds)) {
+      return res.status(403).json({ error: 'Over your reel budget — that\u2019s ' + Math.round(total) + 's of a ' + row.budget_seconds + 's limit.' });
+    }
+    if (total > MAX_CUT_SECONDS) return res.status(400).json({ error: 'That selection is too long.' });
+    res.json({ jobId: startCutJob(row, clips) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Poll a cut job's progress — includes a verification RECEIPT showing each clip's
 // state, the stitch phase, and requested vs actual duration of the joined reel.
 app.get('/api/cuts/:jobId', (req, res) => {
@@ -491,12 +587,13 @@ function sweepStaleCuts() {
 // Exposed for logic tests (see test_helpers.js).
 module.exports = {
   sanitizeClips, sumSeconds, clipCreateBody, pickReadyMp4, concatLooksCorrect,
+  genToken, withinBudget,
   safeFilename, muxDownloadUrl, concatListText, parseFfmpegDuration, round2,
   MIN_CLIP_SECONDS, MAX_CUT_SECONDS, MAX_RANGES, APP_VERSION
 };
 
 if (require.main === module) {
-  if (pool) ensureSchema().then(() => console.log('reel_sends table ready')).catch(e => console.error('schema error:', e.message));
+  if (pool) ensureSchema().then(() => console.log('reel_ tables ready')).catch(e => console.error('schema error:', e.message));
   setInterval(sweepStaleCuts, 10 * 60 * 1000).unref();
   app.listen(PORT, () => console.log('Magic Reel engine ' + APP_VERSION + ' listening on ' + PORT));
 }

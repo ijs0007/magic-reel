@@ -215,7 +215,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.6.5 &mdash; &#9986;&#65039; Clean cut: faster encode</footer>
+  <footer class="ver">Magic Reel &middot; v0.6.6 &mdash; &#129525; Reel build: live progress</footer>
 </div>
 
 <div class="bar">
@@ -330,10 +330,26 @@
   }
 
   var dlScrim=$('dlScrim'),dlModal=$('dlModal'),cutPoll=null;
-  var PHASE_TXT={queued:'Queued\u2026',preparing:'Preparing your footage\u2026',downloading:'Fetching your footage\u2026',rendering:'Rendering your clean cut\u2026'};
-  function renderProc(phase){
-    var txt=PHASE_TXT[phase]||'Working\u2026';
-    dlModal.innerHTML='<h3>Building your reel</h3><p class="lede">Your clean, watermark-free cut is being made from the master \u2014 this can take a moment.</p><div class="pipe"><div class="pl active"><span class="dot"><span class="spin"></span></span>'+txt+'</div></div>';
+  // Mirrors the engine's real pipeline: each range is cut on Mux, then the clips are
+  // joined on our server. Drives a two-step progress display from the cut receipt.
+  function procSteps(phase){
+    // returns [cutOnMux, joinReel] each as '', 'active', or 'done'
+    if(phase==='downloading'||phase==='stitching') return ['done','active'];
+    return ['active','']; // queued / clipping / transcoding
+  }
+  function procLine(cls,label,extra){
+    var icon = cls==='done'
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+      : (cls==='active' ? '<span class="spin"></span>' : '');
+    return '<div class="pl '+cls+'"><span class="dot">'+icon+'</span>'+label+(extra||'')+'</div>';
+  }
+  function renderProc(info){
+    info=info||{}; var ph=info.phase||'queued', r=info.receipt||{}, ss=procSteps(ph), sub='';
+    if(ss[0]==='active' && r.inputsSent>1){ sub=' <span style="opacity:.65;font-weight:500">('+(r.clipsReady||0)+' of '+r.inputsSent+')</span>'; }
+    dlModal.innerHTML='<h3>Building your reel</h3><p class="lede">Your clean, watermark-free cut is being made from the master \u2014 this can take a moment.</p><div class="pipe">'
+      + procLine(ss[0],'Cutting your clips on Mux',sub)
+      + procLine(ss[1],'Joining the reel')
+      + '</div>';
   }
   function renderErr(msg){
     dlModal.innerHTML='<h3>Couldn\u2019t build the reel</h3><p class="lede">'+(msg||'Something went wrong.')+'</p><button class="modalbtn" id="dlRetry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>Try again</button><button class="modalghost" id="closeDl">Back to selecting</button>';
@@ -351,14 +367,14 @@
     fetch('/api/cuts/'+jobId).then(function(r){return r.json();}).then(function(j){
       if(j.status==='ready') renderReady(jobId);
       else if(j.status==='error') renderErr(j.error||'The cut failed.');
-      else { renderProc(j.phase||'rendering'); cutPoll=setTimeout(function(){pollCut(jobId);},2000); }
+      else { renderProc(j); cutPoll=setTimeout(function(){pollCut(jobId);},2000); }
     }).catch(function(){ cutPoll=setTimeout(function(){pollCut(jobId);},3000); });
   }
   function startCut(){
     if(!st.segments.length) return;
     if(!CTX.sendId){ dlScrim.classList.add('show'); renderErr('No film is loaded yet.'); return; }
     if(st.playing) setPlaying(false);
-    dlScrim.classList.add('show'); renderProc('queued');
+    dlScrim.classList.add('show'); renderProc({phase:'queued'});
     fetch('/api/sends/'+CTX.sendId+'/cut',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clips:st.segments.map(function(s){return [s.in,s.out];})})})
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
       .then(function(res){ if(!res.ok){ renderErr(res.j.error||'Server error.'); return; } pollCut(res.j.jobId); })
