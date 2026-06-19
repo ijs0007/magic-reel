@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.8.3 — 🎛️ Dashboard actions: resend, nudge, bump budget';
+const APP_VERSION = 'v0.8.4 — ⏳ Retention: link expiry, asset floor, graceful expired page';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -249,10 +249,16 @@ async function ensureSchema() {
     " status TEXT NOT NULL DEFAULT 'created'," +
     ' duration DOUBLE PRECISION,' +
     ' playback_signed BOOLEAN NOT NULL DEFAULT false,' +
+    ' expires_at TIMESTAMPTZ,' +
+    ' asset_deleted_at TIMESTAMPTZ,' +
     ' created_at TIMESTAMPTZ NOT NULL DEFAULT now()' +
     ')'
   );
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS playback_signed BOOLEAN NOT NULL DEFAULT false');
+  await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ');
+  await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS asset_deleted_at TIMESTAMPTZ');
+  // Backfill expiry for rows that predate the column (LINK_TTL_DAYS is an in-code integer, no injection).
+  await pool.query("UPDATE reel_sends SET expires_at = created_at + interval '" + LINK_TTL_DAYS + " days' WHERE expires_at IS NULL");
   await pool.query(
     'CREATE TABLE IF NOT EXISTS reel_recipients (' +
     ' token TEXT PRIMARY KEY,' +
@@ -400,6 +406,9 @@ app.post('/api/uploads', async (req, res) => {
   if (!muxConfigured()) return res.status(503).json({ error: 'Mux is not configured yet (set MUX_TOKEN_ID and MUX_TOKEN_SECRET).' });
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet (set DATABASE_URL).' });
   try {
+    // Make room before adding another asset: free anything expired, then enforce the floor.
+    await cleanupExpiredSends().catch(function () {});
+    await enforceAssetFloor().catch(function () {});
     const filmName = (req.body && req.body.filmName) || 'Untitled';
     const signed = signingConfigured();
     const upload = await muxFetch('/video/v1/uploads', {
@@ -411,8 +420,8 @@ app.post('/api/uploads', async (req, res) => {
     });
     const id = crypto.randomUUID();
     await pool.query(
-      'INSERT INTO reel_sends (id, film_name, upload_id, status, playback_signed) VALUES ($1, $2, $3, $4, $5)',
-      [id, filmName, upload.id, 'uploading', signed]
+      'INSERT INTO reel_sends (id, film_name, upload_id, status, playback_signed, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
+      [id, filmName, upload.id, 'uploading', signed, expiryFromNow()]
     );
     res.json({ sendId: id, uploadUrl: upload.url });
   } catch (e) {
@@ -492,6 +501,8 @@ const cuts = new Map(); // jobId -> { status, phase, error, filmName, createdAt,
 const MAX_CUT_SECONDS = 600;
 const MAX_RANGES = 25;          // a reel shouldn't need more cuts than this
 const MIN_CLIP_SECONDS = 0.5;   // Mux requires clips of at least 500 ms
+const MAX_ASSETS = 8;           // hard floor: never hold more than this many live master assets (Mux free tier caps at 10; leaves headroom for transient clip-assets)
+const LINK_TTL_DAYS = 14;       // a recipient link (and its master asset) lives this long, then is cleaned up
 const POLL_MS = 2500;
 const CLIP_TIMEOUT_MS = 6 * 60 * 1000;
 const STITCH_TIMEOUT_MS = 3 * 60 * 1000;
@@ -712,7 +723,7 @@ app.post('/api/sends/:id/cut', async (req, res) => {
     const total = sumSeconds(clips);
     if (total > MAX_CUT_SECONDS) return res.status(400).json({ error: 'That selection is too long.' });
     const jobId = crypto.randomUUID();
-    cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: row.film_name, createdAt: Date.now() });
+    cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: row.film_name, assetId: row.asset_id, createdAt: Date.now() });
     res.json({ jobId: jobId });
     processReelViaMux(jobId, row.asset_id, clips, row.film_name); // run in the background
   } catch (e) {
@@ -739,7 +750,7 @@ function meterCheck(totalSeconds, budgetSeconds, usedSeconds) {
 // Start a cut job from a ready send row. Shared by the recipient cut endpoint.
 function startCutJob(send, clips, meter) {
   const jobId = crypto.randomUUID();
-  cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: send.film_name, createdAt: Date.now(), meter: meter || null });
+  cuts.set(jobId, { status: 'queued', phase: 'queued', filmName: send.film_name, assetId: send.asset_id, createdAt: Date.now(), meter: meter || null });
   processReelViaMux(jobId, send.asset_id, clips, send.film_name);
   return jobId;
 }
@@ -841,16 +852,21 @@ app.get('/api/r/:token', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
   try {
     const r = await pool.query(
-      'SELECT rec.name, rec.budget_seconds, rec.used_seconds, s.film_name, s.playback_id, s.playback_signed, s.duration, s.status' +
+      'SELECT rec.name, rec.budget_seconds, rec.used_seconds, s.film_name, s.playback_id, s.playback_signed, s.duration, s.status, s.expires_at, s.asset_deleted_at' +
       ' FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
       [req.params.token]);
     if (!r.rows.length) return res.status(404).json({ error: 'This link is not valid.' });
     const row = r.rows[0];
+    // Expired or cleaned-up: hand the page a clean signal so it shows a graceful message, never a broken player.
+    if (isExpired(row)) {
+      return res.json({ expired: true, filmName: row.film_name, name: row.name, expiresAt: row.expires_at });
+    }
     pool.query('UPDATE reel_recipients SET opened_at = COALESCE(opened_at, now()) WHERE token = $1', [req.params.token]).catch(function () {});
     res.json(Object.assign({
       name: row.name, filmName: row.film_name, playbackId: row.playback_id,
       duration: row.duration, budgetSeconds: row.budget_seconds,
-      usedSeconds: Number(row.used_seconds) || 0, status: row.status
+      usedSeconds: Number(row.used_seconds) || 0, status: row.status,
+      expiresAt: row.expires_at
     }, playbackTokens(row.playback_id, row.playback_signed)));
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -868,6 +884,7 @@ app.post('/api/r/:token/cut', async (req, res) => {
       [req.params.token]);
     if (!r.rows.length) return res.status(404).json({ error: 'This link is not valid.' });
     const row = r.rows[0];
+    if (isExpired(row)) return res.status(410).json({ error: 'This link has expired \u2014 ask for a fresh one.', expired: true });
     if (row.status !== 'ready') return res.status(409).json({ error: 'This film isn\u2019t ready yet.' });
     if (!row.asset_id) return res.status(409).json({ error: 'This film has no master asset to cut from yet.' });
     const clips = sanitizeClips(req.body && req.body.clips, row.duration);
@@ -928,6 +945,88 @@ app.get('/api/cuts/:jobId/download', (req, res) => {
   });
 });
 
+// --- Retention: link expiry + a hard asset floor so we never hit Mux's 10-asset cap.
+//     Expiry is the primary, recipient-visible trigger; the floor is a deterministic
+//     safety net. Both delete the master Mux asset and mark the send so its link shows
+//     a graceful "expired" page instead of a broken player. ---
+
+function expiryFromNow() { return new Date(Date.now() + LINK_TTL_DAYS * 86400000); }
+
+// A send is expired (for the recipient) if its master was cleaned up, or its time is up.
+function isExpired(row) {
+  if (!row) return false;
+  if (row.asset_deleted_at) return true;
+  return !!(row.expires_at && new Date(row.expires_at).getTime() < Date.now());
+}
+
+// Master assets currently referenced by an in-flight cut — never evict these.
+function activeCutAssetIds() {
+  const ids = new Set();
+  for (const job of cuts.values()) {
+    if (job && job.assetId && job.status !== 'ready' && job.status !== 'error') ids.add(job.assetId);
+  }
+  return ids;
+}
+
+// Delete one send's master Mux asset (best-effort) and mark it deleted in the DB.
+// A 404 from Mux means it's already gone — still mark it. Transient errors are left
+// for the next sweep to retry.
+async function deleteSendAsset(send) {
+  if (!pool || !send || !send.asset_id || send.asset_deleted_at) return false;
+  try {
+    await muxFetch('/video/v1/assets/' + send.asset_id, { method: 'DELETE' });
+  } catch (e) {
+    if (e.status !== 404) { console.warn('[reel-retention] could not delete asset', send.asset_id, '-', e.message); return false; }
+  }
+  await pool.query('UPDATE reel_sends SET asset_deleted_at = now() WHERE id = $1', [send.id]);
+  return true;
+}
+
+// Primary cleaner: free the master of every send whose link has passed its expiry.
+async function cleanupExpiredSends() {
+  if (!pool || !muxConfigured()) return;
+  const q = await pool.query(
+    'SELECT id, asset_id FROM reel_sends' +
+    ' WHERE asset_id IS NOT NULL AND asset_deleted_at IS NULL AND expires_at IS NOT NULL AND expires_at < now()');
+  for (const row of q.rows) {
+    await deleteSendAsset({ id: row.id, asset_id: row.asset_id, asset_deleted_at: null });
+  }
+}
+
+// Safety net: while we hold >= MAX_ASSETS live masters, evict the best candidate —
+// expired first, then sends everyone has already downloaded, then the oldest. Never an
+// asset an in-flight cut depends on; if every live master is busy, we bail rather than
+// break a cut.
+async function enforceAssetFloor() {
+  if (!pool || !muxConfigured()) return;
+  const q = await pool.query(
+    'SELECT s.id, s.asset_id, s.created_at, s.expires_at,' +
+    ' COUNT(rec.token) AS recips,' +
+    ' COUNT(rec.token) FILTER (WHERE rec.used_seconds > 0.05) AS downloaded' +
+    ' FROM reel_sends s LEFT JOIN reel_recipients rec ON rec.send_id = s.id' +
+    ' WHERE s.asset_id IS NOT NULL AND s.asset_deleted_at IS NULL' +
+    ' GROUP BY s.id ORDER BY s.created_at ASC');
+  let rows = q.rows;
+  if (rows.length < MAX_ASSETS) return;
+  const now = Date.now();
+  const busy = activeCutAssetIds();
+  function rank(r) {
+    const expired = r.expires_at && new Date(r.expires_at).getTime() < now;
+    const recips = Number(r.recips) || 0, dl = Number(r.downloaded) || 0;
+    const allDown = recips > 0 && dl >= recips;
+    return expired ? 0 : (allDown ? 1 : 2); // lower = evict sooner
+  }
+  while (rows.length >= MAX_ASSETS) {
+    const cands = rows
+      .filter(function (r) { return r.asset_id && !busy.has(r.asset_id); })
+      .sort(function (a, b) { return rank(a) - rank(b); }); // rows already oldest-first, so ties keep age order
+    if (!cands.length) break; // every live master is mid-cut — don't break one to make room
+    const victim = cands[0];
+    await deleteSendAsset({ id: victim.id, asset_id: victim.asset_id, asset_deleted_at: null });
+    rows = rows.filter(function (r) { return r.id !== victim.id; });
+  }
+}
+
 // Sweep abandoned cut jobs (never downloaded) so their Mux assets + temp files don't linger.
 function sweepStaleCuts() {
   const now = Date.now();
@@ -945,11 +1044,20 @@ module.exports = {
   sanitizeClips, sumSeconds, clipCreateBody, pickReadyMp4, concatLooksCorrect,
   genToken, withinBudget, meterCheck, fmtClock, emailEsc, signMuxToken, b64url,
   safeFilename, muxDownloadUrl, concatListText, parseFfmpegDuration, round2,
-  MIN_CLIP_SECONDS, MAX_CUT_SECONDS, MAX_RANGES, APP_VERSION
+  isExpired, expiryFromNow, activeCutAssetIds,
+  MIN_CLIP_SECONDS, MAX_CUT_SECONDS, MAX_RANGES, MAX_ASSETS, LINK_TTL_DAYS, APP_VERSION
 };
 
+function runRetention() {
+  cleanupExpiredSends().catch(function (e) { console.warn('[reel-retention] cleanup:', e.message); });
+  enforceAssetFloor().catch(function (e) { console.warn('[reel-retention] floor:', e.message); });
+}
+
 if (require.main === module) {
-  if (pool) ensureSchema().then(() => console.log('reel_ tables ready')).catch(e => console.error('schema error:', e.message));
+  if (pool) ensureSchema()
+    .then(() => { console.log('reel_ tables ready'); runRetention(); })
+    .catch(e => console.error('schema error:', e.message));
   setInterval(sweepStaleCuts, 10 * 60 * 1000).unref();
+  setInterval(runRetention, 30 * 60 * 1000).unref();
   app.listen(PORT, () => console.log('Magic Reel engine ' + APP_VERSION + ' listening on ' + PORT));
 }

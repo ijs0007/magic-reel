@@ -126,6 +126,12 @@
 
   footer.ver{text-align:center;color:var(--text-soft);opacity:.7;font-size:11px;padding:22px 0 6px}
 
+  .blockpad{text-align:center;padding:42px 26px}
+  .blockico{width:56px;height:56px;border-radius:50%;background:var(--pick-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+  .blockico svg{width:27px;height:27px;color:var(--text-soft)}
+  .blocktitle{font-size:19px;font-weight:600;margin:0 0 8px}
+  .blockbody{font-size:13.5px;color:var(--text-soft);margin:0 auto;max-width:340px;line-height:1.55}
+
   .scrim{position:fixed;inset:0;z-index:60;background:rgba(20,20,22,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:22px}
   .scrim.show{display:flex}
   .modal{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.28);padding:28px 24px;text-align:center;animation:pop .28s cubic-bezier(.2,.9,.3,1.2)}
@@ -172,6 +178,14 @@
     </div>
   </div>
 
+  <div class="card blockcard" id="blockCard" style="display:none">
+    <div class="pad blockpad">
+      <div class="blockico" id="blockIco"></div>
+      <h3 class="blocktitle" id="blockTitle"></h3>
+      <p class="blockbody" id="blockBody"></p>
+    </div>
+  </div>
+
   <div class="card">
     <div class="stage" id="stage">
       <mux-video id="player" stream-type="on-demand" max-resolution="480p" playsinline></mux-video>
@@ -215,7 +229,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.6.9 &mdash; &#128274; Signed playback: private preview</footer>
+  <footer class="ver">Magic Reel &middot; v0.8.4 &mdash; &#9203; Retention: link expiry &amp; graceful expired page</footer>
 </div>
 
 <div class="bar">
@@ -279,6 +293,29 @@
   var stageMsg=$('stageMsg');
   function showMsg(txt,spin){ stageMsg.innerHTML='<div class="sm-in">'+(spin?'<div class="spin2"></div>':'')+'<span>'+txt+'</span></div>'; stageMsg.style.display='flex'; }
   function hideMsg(){ stageMsg.style.display='none'; }
+  // A full clean state for links that are expired/cleaned-up or invalid — replaces the
+  // entire player surface so a recipient never lands on a broken player or live controls.
+  function showBlocked(kind,data){
+    data=data||{};
+    try{ clearTimeout(loadPoll); }catch(e){}
+    try{ clearTimeout(cutPoll); }catch(e){}
+    try{ if(dlScrim) dlScrim.classList.remove('show'); }catch(e){}
+    Array.prototype.forEach.call(document.querySelectorAll('.greet, .card:not(.blockcard), .bar'),function(el){ el.style.display='none'; });
+    var ico,title,body;
+    if(kind==='expired'){
+      ico='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+      title='This link has expired';
+      var film=data.filmName?('\u201c'+xmlEsc(data.filmName)+'\u201d'):'this footage';
+      body='The preview for '+film+' is no longer available to download. If you still need to pull your selects, ask '+xmlEsc(CTX.sender.split(' ')[0])+' to send a fresh link.';
+    } else {
+      ico='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 13.5a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7L11 7"/><path d="M14.5 10.5a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7L13 17"/><path d="M3 3l18 18"/></svg>';
+      title='This link isn\u2019t valid';
+      body='Double-check the link you were sent, or ask whoever shared it for a new one.';
+    }
+    $('blockIco').innerHTML=ico; $('blockTitle').textContent=title; $('blockBody').innerHTML=body;
+    $('blockCard').style.display='';
+    try{ document.title='Magic Reel \u2014 '+(kind==='expired'?'Link expired':'Link not found'); }catch(e){}
+  }
   // For signed assets the server returns a short-lived playback-token; set it before the id
   // so mux-video includes it when it loads. Public assets return no token (works unchanged).
   function setPlayback(j){
@@ -297,17 +334,20 @@
     if(typeof j.usedSeconds==='number') CTX.used=j.usedSeconds;
     $('grName').textContent=CTX.name; $('grAva').textContent=initials(CTX.name);
     $('grFilm').textContent=CTX.film;
-    $('grCap').textContent=CTX.sender.split(' ')[0]+' set your reel length to '+fmt(CTX.budget);
+    var capLine=CTX.sender.split(' ')[0]+' set your reel length to '+fmt(CTX.budget);
+    if(j.expiresAt){ var ed=new Date(j.expiresAt); if(!isNaN(ed.getTime())) capLine+=' \u00b7 link expires '+ed.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+    $('grCap').textContent=capLine;
     setWatermark(CTX.name);
     if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); }
     updateMarkers(); renderSegments(); renderBudget();
   }
   function loadByToken(){
     fetch('/api/r/'+encodeURIComponent(TOKEN)).then(function(r){
-      if(r.status===404){ showMsg('This link isn\u2019t valid or has expired.',false); return null; }
+      if(r.status===404){ showBlocked('invalid'); return null; }
       return r.json();
     }).then(function(j){
       if(!j) return;
+      if(j.expired){ showBlocked('expired',j); return; }
       applyRecipient(j);
       if(j.status==='ready'&&j.playbackId){ CTX.ready=true; setPlayback(j); hideMsg(); }
       else if(j.status==='error'){ showMsg('This film couldn\u2019t be processed.',false); }
@@ -424,7 +464,7 @@
     var cutUrl=TOKEN?('/api/r/'+encodeURIComponent(TOKEN)+'/cut'):('/api/sends/'+CTX.sendId+'/cut');
     fetch(cutUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clips:st.segments.map(function(s){return [s.in,s.out];})})})
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
-      .then(function(res){ if(!res.ok){ if(typeof res.j.remainingSeconds==='number'){ CTX.used=Math.max(0,CTX.budget-res.j.remainingSeconds); renderBudget(); } renderErr(res.j.error||'Server error.'); return; } st.pendingRemaining=(typeof res.j.remainingSeconds==='number')?res.j.remainingSeconds:null; pollCut(res.j.jobId); })
+      .then(function(res){ if(!res.ok){ if(res.j&&res.j.expired){ showBlocked('expired',{filmName:CTX.film}); return; } if(typeof res.j.remainingSeconds==='number'){ CTX.used=Math.max(0,CTX.budget-res.j.remainingSeconds); renderBudget(); } renderErr(res.j.error||'Server error.'); return; } st.pendingRemaining=(typeof res.j.remainingSeconds==='number')?res.j.remainingSeconds:null; pollCut(res.j.jobId); })
       .catch(function(){ renderErr('Couldn\u2019t reach the server.'); });
   }
   $('dlBtn').addEventListener('click',startCut);
