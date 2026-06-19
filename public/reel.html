@@ -226,7 +226,7 @@
     <div class="stage" id="stage">
       <mux-video id="player" stream-type="on-demand" max-resolution="480p" playsinline></mux-video>
       <div class="wm" id="wm"></div>
-      <div class="lowres">PREVIEW &middot; watermarked &middot; low-res</div>
+      <div class="lowres" id="lowres">PREVIEW &middot; watermarked &middot; low-res</div>
       <div class="pbig" id="pbig"><div class="circ"><svg viewBox="0 0 24 24" fill="#111"><polygon points="6 4 20 12 6 20 6 4"/></svg></div></div>
       <div class="stagemsg" id="stageMsg" style="display:none"></div>
     </div>
@@ -289,7 +289,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.8.6 &mdash; &#9199;&#65039; Transport: J-K-L shuttle, frame step &amp; review deck</footer>
+  <footer class="ver">Magic Reel &middot; v0.8.7 &mdash; &#128081; Per-person watermark: legible on any footage, names the recipient</footer>
 </div>
 
 <div class="bar">
@@ -316,7 +316,23 @@
 
   function xmlEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   function initials(name){var p=String(name||'').trim().split(/\s+/);var a=(p[0]||'')[0]||'';var b=(p.length>1?(p[p.length-1][0]||''):'');return ((a+b).toUpperCase())||'\u2726';}
-  function setWatermark(name){var label=name?(xmlEsc(name)+' \u00b7 MAGIC REEL'):'MAGIC REEL \u00b7 PREVIEW';var svg='<svg xmlns="http://www.w3.org/2000/svg" width="260" height="150"><text x="6" y="78" font-family="Poppins, Arial, sans-serif" font-size="12" font-weight="600" fill="rgba(255,255,255,0.16)" transform="rotate(-26 130 75)">'+label+'</text></svg>';$('wm').style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';$('wm').style.backgroundRepeat='repeat';}
+  // Per-person screener watermark. Tiled across the preview ONLY (a DOM overlay) so any
+  // screen-recording is traceable to this recipient; the clean download never carries it.
+  // White fill + dark halo (paint-order:stroke) keeps it legible on bright AND dark footage;
+  // centered text avoids half-words at the tile seams.
+  function setWatermark(name){
+    var n=(name||'').trim();
+    var label = n ? (n.length>22 ? n.slice(0,21)+'\u2026' : n).toUpperCase() : 'MAGIC REEL \u00b7 PREVIEW';
+    var t=xmlEsc(label);
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="250" height="150">'
+      +'<text x="125" y="82" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1" paint-order="stroke" stroke="#000" stroke-opacity="0.16" stroke-width="2.6" fill="#fff" fill-opacity="0.22" transform="rotate(-24 125 75)">'+t+'</text>'
+      +'</svg>';
+    var wm=$('wm');
+    wm.style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';
+    wm.style.backgroundRepeat='repeat';
+    wm.style.backgroundPosition='center';
+    var lr=$('lowres'); if(lr) lr.innerHTML = n ? ('PREVIEW &middot; for '+xmlEsc(n)+' &middot; watermarked') : 'PREVIEW &middot; watermarked &middot; low-res';
+  }
   setWatermark(null);
 
   $('grName').textContent='there';
