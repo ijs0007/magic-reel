@@ -63,11 +63,11 @@
   .tcode{font-size:13px;font-weight:500;color:var(--text-soft);font-variant-numeric:tabular-nums}
   .tcode b{color:var(--text);font-weight:600}
 
-  .tlwrap{padding:8px 16px 4px}
-  .tl{position:relative;height:46px;background:var(--bg);border:1px solid var(--border);border-radius:9px;cursor:pointer;overflow:hidden;touch-action:none}
+  .tlwrap{padding:12px 16px 4px}
+  .tl{position:relative;height:32px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;overflow:hidden;touch-action:none}
   .tl .ticks{position:absolute;inset:0;pointer-events:none;background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),rgba(0,0,0,.05) calc(10% - 1px),rgba(0,0,0,.05) 10%)}
   body.dark .tl .ticks{background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),rgba(255,255,255,.06) calc(10% - 1px),rgba(255,255,255,.06) 10%)}
-  .seg{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 26%,transparent);border-left:2px solid var(--accent);border-right:2px solid var(--accent)}
+  .seg{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--good) 30%,transparent);border-left:2px solid var(--good);border-right:2px solid var(--good)}
   .range{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 14%,transparent);border-left:2px dashed var(--accent);border-right:2px dashed var(--accent);pointer-events:none}
   .marker{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--accent);pointer-events:none}
   .marker.in::after,.marker.out::after{content:attr(data-l);position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:600;color:var(--accent);background:var(--surface);border:1px solid var(--accent);border-radius:4px;padding:0 3px}
@@ -94,7 +94,7 @@
   .budget .nums{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
   .budget .used{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
   .budget .cap{font-size:12px;color:var(--text-soft);font-variant-numeric:tabular-nums}
-  .meter{height:9px;border-radius:6px;background:var(--pick-bg);overflow:hidden}
+  .meter{height:5px;border-radius:4px;background:var(--pick-bg);overflow:hidden}
   .meter .fill{height:100%;width:0;background:linear-gradient(90deg,var(--t1),var(--t2));border-radius:6px;transition:width .25s}
   .meter .fill.full{background:var(--err)}
 
@@ -144,6 +144,35 @@
   .fitbtn.on{background:var(--accent);color:var(--accent-text);border-style:solid}
   .fitbtn svg{width:16px;height:16px}
   .olapnote{color:var(--err);font-weight:600}
+
+  /* v0.8.8 compact recipient layout */
+  .tapzone{position:absolute;inset:0;z-index:2;cursor:pointer}
+  .wm{z-index:1}
+  .lowres{z-index:5}
+  .pbig{z-index:4;pointer-events:none}
+  .stagemsg{z-index:6}
+  .deck{padding:9px 16px 2px}
+  .deck .deckhead{margin-bottom:9px}
+  .markrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 16px 2px}
+  .markrow .mr-l,.markrow .mr-r{display:flex;gap:8px}
+  .mbtn2{position:relative;border:1px solid var(--border);background:var(--field);border-radius:9px;cursor:pointer;color:var(--text);width:48px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:border-color .12s,background .12s,color .12s,opacity .12s;-webkit-tap-highlight-color:transparent}
+  .mbtn2:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  .mbtn2 svg{width:18px;height:18px}
+  .mbtn2 .lt{font-size:8.5px;font-weight:700;color:var(--text-soft);font-variant-numeric:tabular-nums;line-height:1}
+  .mbtn2.set{border-color:var(--accent);color:var(--accent)}
+  .mbtn2.set .lt{color:var(--accent)}
+  .mbtn2.active{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .mbtn2.active .lt{color:var(--accent-text)}
+  .mbtn2.fitm.on{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .mbtn2.addm{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .mbtn2.addm:hover:not(:disabled){opacity:.9;border-color:var(--accent);color:var(--accent-text)}
+  .mbtn2.addm:disabled{opacity:.4;cursor:default;background:var(--field);border-color:var(--border);color:var(--text-soft)}
+  @media (max-width:540px){
+    #deck .dk-speed,#deck .dk-budget,#tHome,#tRev,#tPlay,#tFwd,#tEnd,#deck .deckhint{display:none}
+    #deck .deckhead{justify-content:center;margin-bottom:8px}
+    #deck .kcaps{gap:12px}
+    #tFrameBack,#tFrameFwd{flex:0 0 auto;min-width:74px}
+  }
 
   /* transport / review deck — keyboard legend on desktop, tap controls on mobile */
   .mbtn.active{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
@@ -227,12 +256,9 @@
       <mux-video id="player" stream-type="on-demand" max-resolution="480p" playsinline></mux-video>
       <div class="wm" id="wm"></div>
       <div class="lowres" id="lowres">PREVIEW &middot; watermarked &middot; low-res</div>
+      <div class="tapzone" id="tapzone"></div>
       <div class="pbig" id="pbig"><div class="circ"><svg viewBox="0 0 24 24" fill="#111"><polygon points="6 4 20 12 6 20 6 4"/></svg></div></div>
       <div class="stagemsg" id="stageMsg" style="display:none"></div>
-    </div>
-    <div class="transport">
-      <button class="pp" id="pp" aria-label="Play"><svg id="ppIco" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
-      <div class="tcode"><b id="cur">0:00</b> <span id="tot">/ 14:32</span></div>
     </div>
     <div class="tlwrap">
       <div class="tl" id="tl">
@@ -246,20 +272,9 @@
         <div class="playhead" id="ph" style="left:0"></div>
       </div>
     </div>
-    <div class="marks">
-      <button class="mbtn" id="markInBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5"/><path d="M16 4l4 8-4 8"/></svg>Mark In <span class="lt" id="inLt">&mdash;</span></button>
-      <button class="mbtn" id="markOutBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/><path d="M8 4L4 12l4 8"/></svg>Mark Out <span class="lt" id="outLt">&mdash;</span></button>
-    </div>
-    <button class="fitbtn" id="fitBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/></svg>Use my remaining time</button>
-    <div class="candidate" id="cand">Mark an In point to start a clip.</div>
-    <button class="addbtn" id="addBtn" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add clip to reel</button>
-  </div>
-
-  <div class="card deck locked" id="deck">
-    <div class="pad">
-      <p class="eyebrow">Review &amp; scrub</p>
+    <div class="deck locked" id="deck">
       <div class="deckhead">
-        <span class="dk-tc"><b id="dkTc">0:00 / 0:00</b></span>
+        <span class="dk-tc"><b id="cur">0:00</b><span id="tot"> / 0:00</span></span>
         <span class="dk-speed" id="dkSp">Paused</span>
         <span class="dk-budget" id="dkBg">0:00 of 2:00</span>
       </div>
@@ -274,6 +289,18 @@
       </div>
       <p class="deckhint"><b>Space</b> play &middot; <b>J K L</b> shuttle &middot; <b>&larr; &rarr;</b> frame &middot; <b>I O</b> mark &middot; <b>Enter</b> add &middot; <b>&#9003;</b> remove last</p>
     </div>
+
+    <div class="markrow">
+      <div class="mr-l">
+        <button class="mbtn2" id="markInBtn" title="Mark In (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5"/><path d="M16 4l4 8-4 8"/></svg><span class="lt" id="inLt">&mdash;</span></button>
+        <button class="mbtn2" id="markOutBtn" title="Mark Out (O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/><path d="M8 4L4 12l4 8"/></svg><span class="lt" id="outLt">&mdash;</span></button>
+      </div>
+      <div class="mr-r">
+        <button class="mbtn2 fitm" id="fitBtn" title="Use my remaining time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/></svg></button>
+        <button class="mbtn2 addm" id="addBtn" disabled title="Add clip (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+    </div>
+    <div class="candidate" id="cand">Mark an In point to start a clip.</div>
   </div>
 
   <div class="card">
@@ -289,7 +316,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.8.7 &mdash; &#128081; Per-person watermark: legible on any footage, names the recipient</footer>
+  <footer class="ver">Magic Reel &middot; v0.8.8 &mdash; &#128241; Recipient page: compact NLE layout, tap-to-play, deck under the video</footer>
 </div>
 
 <div class="bar">
@@ -345,7 +372,7 @@
   // --- real player (Mux), wired to the same marking + budget UI ---
   var player=$('player');
 
-  function setPpIcon(p){ $('ppIco').innerHTML=p?'<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>':'<polygon points="6 4 20 12 6 20 6 4"/>'; $('pp').setAttribute('aria-label',p?'Pause':'Play'); $('pbig').classList.toggle('hide',p); }
+  function setPpIcon(p){ $('pbig').classList.toggle('hide',p); }
 
   // --- transport engine: forward uses native playbackRate; reverse is SIMULATED by
   //     stepping currentTime backward on a timer (HLS has no negative playbackRate). ---
@@ -376,8 +403,8 @@
   player.addEventListener('timeupdate',render);
   player.addEventListener('seeking',render);
   player.addEventListener('loadedmetadata',function(){ if(player.duration&&isFinite(player.duration)){ CTX.duration=player.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } });
-  $('pp').addEventListener('click',togglePlay);
-  $('pbig').addEventListener('click',function(){ setTransport(1,1); });
+  $('pp')&&$('pp').addEventListener('click',togglePlay);
+  $('tapzone').addEventListener('click',function(){ if(controlsActive()) togglePlay(); });
 
   function pct(t){return CTX.duration>0?(t/CTX.duration*100):0;}
   function render(){var t=player.currentTime||0;$('cur').textContent=fmt(t);$('ph').style.left=pct(t)+'%';var e=$('dkTc');if(e)e.textContent=fmt(t)+' / '+fmt(CTX.duration||0);}
@@ -458,7 +485,10 @@
   showMsg('Loading your footage\u2026',true);
   if(TOKEN){ loadByToken(); }
   else {
-    fetch('/api/sends/latest').then(function(r){return r.json();}).then(function(j){
+    fetch('/api/sends/latest').then(function(r){
+      if(r.status===401){ showMsg('This is the owner preview \u2014 sign in on this device, or open a recipient link to use it.',false); return null; }
+      return r.json();
+    }).then(function(j){
       if(!j || j.none){ showMsg('No footage has been uploaded yet. Drop a film on the send screen first.',false); return; }
       CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film;
       if(j.status==='ready'&&j.playbackId){ loadFilm(j); } else { checkSend(j.sendId); }
@@ -484,7 +514,7 @@
   function enterFit(){ var len=fitLen(); if(len<=0.05) return; st.markIn=null; st.markOut=null; var start=Math.min(Math.max(0,player.currentTime||0), Math.max(0,(CTX.duration||0)-len)); st.fit={start:start,len:len}; try{player.currentTime=start;}catch(e){} renderFit(); updateMarkers(); render(); }
   function exitFit(){ if(!st.fit) return; st.fit=null; renderFit(); updateMarkers(); }
   function renderFit(){ var fb=$('fitBlock'); if(!fb) return; if(!st.fit){ fb.style.display='none'; return; } fb.style.display=''; fb.style.left=pct(st.fit.start)+'%'; fb.style.width=pct(st.fit.len)+'%'; }
-  function updateFitBtn(){ var b=$('fitBtn'); if(!b) return; if(st.fit){ b.disabled=false; b.classList.add('on'); b.innerHTML=FIT_ICON+'Cancel block'; return; } b.classList.remove('on'); var rem=remaining(); if(rem<=0.05){ b.disabled=true; b.innerHTML=FIT_ICON+'No time left'; return; } b.disabled=false; b.innerHTML=FIT_ICON+'Use my remaining time \u00b7 '+fmt(rem); }
+  function updateFitBtn(){ var b=$('fitBtn'); if(!b) return; b.innerHTML=FIT_ICON; if(st.fit){ b.disabled=false; b.classList.add('on'); b.title='Cancel block'; return; } b.classList.remove('on'); var rem=remaining(); if(rem<=0.05){ b.disabled=true; b.title='No time left'; return; } b.disabled=false; b.title='Use my remaining time \u00b7 '+fmt(rem); }
   function updateMarkers(){
     var mi=$('mkIn'),mo=$('mkOut'),rg=$('range');
     if(st.markIn!=null){mi.style.display='';mi.style.left=pct(st.markIn)+'%';$('inLt').textContent=fmt(st.markIn);$('markInBtn').classList.add('set');}else{mi.style.display='none';$('inLt').textContent='\u2014';$('markInBtn').classList.remove('set');}
@@ -536,7 +566,7 @@
 
   // keyboard shortcuts (NLE-style); ignored while typing in a field or before a film loads
   function typingInField(e){ var t=e.target; if(!t) return false; var tag=(t.tagName||'').toLowerCase(); return tag==='input'||tag==='textarea'||tag==='select'||t.isContentEditable; }
-  function controlsActive(){ return CTX.ready && $('blockCard').style.display==='none'; }
+  function controlsActive(){ return CTX.ready && $('blockCard').style.display==='none' && !$('dlScrim').classList.contains('show'); }
   var keysDown={};
   document.addEventListener('keyup',function(e){ delete keysDown[(e.key||'').toLowerCase()]; });
   document.addEventListener('keydown',function(e){
@@ -597,7 +627,7 @@
     var bg=$('dkBg');if(bg)bg.textContent=fmt(u)+' of '+fmt(CTX.budget);deckLock();
   }
 
-  var dlScrim=$('dlScrim'),dlModal=$('dlModal'),cutPoll=null;
+  var dlScrim=$('dlScrim'),dlModal=$('dlModal'),cutPoll=null,building=false;
   // Mirrors the engine's real pipeline: each range is cut on Mux, then the clips are
   // joined on our server. Drives a two-step progress display from the cut receipt.
   function procSteps(phase){
@@ -614,17 +644,19 @@
   function renderProc(info){
     info=info||{}; var ph=info.phase||'queued', r=info.receipt||{}, ss=procSteps(ph), sub='';
     if(ss[0]==='active' && r.inputsSent>1){ sub=' <span style="opacity:.65;font-weight:500">('+(r.clipsReady||0)+' of '+r.inputsSent+')</span>'; }
-    dlModal.innerHTML='<h3>Building your reel</h3><p class="lede">Your clean, watermark-free cut is being made from the master \u2014 this can take a moment.</p><div class="pipe">'
+    dlModal.innerHTML='<h3>Building your reel</h3><p class="lede">Your clean, watermark-free cut is being made from the master \u2014 this can take a moment. Keep this window open; it becomes your download as soon as it\u2019s ready.</p><div class="pipe">'
       + procLine(ss[0],'Cutting your clips on Mux',sub)
       + procLine(ss[1],'Joining the reel')
       + '</div>';
   }
   function renderErr(msg){
+    building=false;
     dlModal.innerHTML='<h3>Couldn\u2019t build the reel</h3><p class="lede">'+(msg||'Something went wrong.')+'</p><button class="modalbtn" id="dlRetry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>Try again</button><button class="modalghost" id="closeDl">Back to selecting</button>';
     $('dlRetry').addEventListener('click',beginCut);
     $('closeDl').addEventListener('click',function(){dlScrim.classList.remove('show');});
   }
   function renderReady(jobId){
+    building=false;
     var u=used(),n=st.segments.length;
     dlModal.innerHTML='<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Your reel is ready</h3><p class="lede">Clean, no watermark \u2014 cut from the master.</p><div class="summary"><div class="row"><span class="k">Clips</span><span class="v">'+n+'</span></div><div class="row"><span class="k">Total length</span><span class="v">'+fmt(u)+'</span></div><div class="row"><span class="k">Quality</span><span class="v">Up to source</span></div><div class="row"><span class="k">Watermark</span><span class="v">None</span></div></div><button class="modalbtn" id="saveBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>Save to device</button><button class="modalghost" id="closeDl">Back to selecting</button>';
     $('saveBtn').addEventListener('click',function(){var a=document.createElement('a');a.href='/api/cuts/'+jobId+'/download';a.download='';document.body.appendChild(a);a.click();a.remove();});
@@ -656,6 +688,7 @@
   }
   function beginCut(){
     if(st.playing) setPlaying(false);
+    building=true;
     dlScrim.classList.add('show'); renderProc({phase:'queued'});
     var cutUrl=TOKEN?('/api/r/'+encodeURIComponent(TOKEN)+'/cut'):('/api/sends/'+CTX.sendId+'/cut');
     fetch(cutUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clips:st.segments.map(function(s){return [s.in,s.out];})})})
@@ -664,7 +697,7 @@
       .catch(function(){ renderErr('Couldn\u2019t reach the server.'); });
   }
   $('dlBtn').addEventListener('click',startCut);
-  dlScrim.addEventListener('click',function(e){if(e.target===dlScrim)dlScrim.classList.remove('show');});
+  dlScrim.addEventListener('click',function(e){if(e.target===dlScrim&&!building)dlScrim.classList.remove('show');});
 
   render();updateMarkers();renderSegments();renderBudget();updateTransportUI();
 })();
