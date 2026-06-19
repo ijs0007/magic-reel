@@ -145,6 +145,29 @@
   .fitbtn svg{width:16px;height:16px}
   .olapnote{color:var(--err);font-weight:600}
 
+  /* transport / review deck — keyboard legend on desktop, tap controls on mobile */
+  .mbtn.active{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
+  .mbtn.active svg{color:var(--accent-text)}
+  .deck.locked{opacity:.5;pointer-events:none}
+  .deck .deckhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 13px;font-size:12.5px;color:var(--text-soft)}
+  .deck .dk-tc b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+  .deck .dk-speed{font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .deck .dk-budget{font-variant-numeric:tabular-nums}
+  .kcaps{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+  .kcap{flex:1 1 0;min-width:42px;max-width:66px;border:1px solid var(--border);background:var(--field);border-radius:10px;cursor:pointer;color:var(--text);padding:9px 4px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:transform .08s,background .12s,border-color .12s,box-shadow .12s;-webkit-tap-highlight-color:transparent}
+  .kcap.wide{flex:1.4 1 0;max-width:86px}
+  .kcap:hover{border-color:var(--accent)}
+  .kcap:active{transform:translateY(1px)}
+  .kcap svg{width:20px;height:20px;display:block}
+  .kcap .kl{font-size:9.5px;font-weight:600;color:var(--text-soft)}
+  .kcap.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+  .kcap.on .kl{color:var(--accent)}
+  .kcap.active{background:var(--accent);border-color:var(--accent);color:var(--accent-text);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent)}
+  .kcap.active .kl{color:var(--accent-text)}
+  .deckhint{font-size:11px;color:var(--text-soft);text-align:center;margin:12px 0 0;line-height:1.6}
+  .deckhint b{color:var(--text);font-weight:600}
+  @media (max-width:540px){ .deckhint{display:none} }
+
   .scrim{position:fixed;inset:0;z-index:60;background:rgba(20,20,22,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:22px}
   .scrim.show{display:flex}
   .modal{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.28);padding:28px 24px;text-align:center;animation:pop .28s cubic-bezier(.2,.9,.3,1.2)}
@@ -232,6 +255,27 @@
     <button class="addbtn" id="addBtn" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add clip to reel</button>
   </div>
 
+  <div class="card deck locked" id="deck">
+    <div class="pad">
+      <p class="eyebrow">Review &amp; scrub</p>
+      <div class="deckhead">
+        <span class="dk-tc"><b id="dkTc">0:00 / 0:00</b></span>
+        <span class="dk-speed" id="dkSp">Paused</span>
+        <span class="dk-budget" id="dkBg">0:00 of 2:00</span>
+      </div>
+      <div class="kcaps">
+        <button class="kcap" id="tHome" title="Jump to start (Home)"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="6" width="2.2" height="12" rx="1"/><path d="M20 6.5v11l-9-5.5z"/></svg><span class="kl">Home</span></button>
+        <button class="kcap" id="tFrameBack" title="Back one frame (&larr;)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 6.5v11l-8-5.5z"/></svg><span class="kl">&larr;</span></button>
+        <button class="kcap" id="tRev" title="Reverse &mdash; tap to speed up (J)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 6.5v11l-8-5.5z"/><path d="M21 6.5v11l-8-5.5z"/></svg><span class="kl">J</span></button>
+        <button class="kcap wide" id="tPlay" title="Play / pause (Space or K)"><span id="tPlayIc"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></span><span class="kl">Space</span></button>
+        <button class="kcap" id="tFwd" title="Forward &mdash; tap to speed up (L)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 6.5 21 12l-8 5.5z"/><path d="M3 6.5 11 12l-8 5.5z"/></svg><span class="kl">L</span></button>
+        <button class="kcap" id="tFrameFwd" title="Forward one frame (&rarr;)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6.5 18 12l-8 5.5z"/></svg><span class="kl">&rarr;</span></button>
+        <button class="kcap" id="tEnd" title="Jump to end (End)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 6.5 13 12l-8 5.5z"/><rect x="16.8" y="6" width="2.2" height="12" rx="1"/></svg><span class="kl">End</span></button>
+      </div>
+      <p class="deckhint"><b>Space</b> play &middot; <b>J K L</b> shuttle &middot; <b>&larr; &rarr;</b> frame &middot; <b>I O</b> mark &middot; <b>Enter</b> add &middot; <b>&#9003;</b> remove last</p>
+    </div>
+  </div>
+
   <div class="card">
     <div class="pad">
       <p class="eyebrow">Your reel</p>
@@ -245,7 +289,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.8.5 &mdash; &#127919; Selection: fit-to-remaining, overlap shading &amp; warning</footer>
+  <footer class="ver">Magic Reel &middot; v0.8.6 &mdash; &#9199;&#65039; Transport: J-K-L shuttle, frame step &amp; review deck</footer>
 </div>
 
 <div class="bar">
@@ -286,22 +330,45 @@
   var player=$('player');
 
   function setPpIcon(p){ $('ppIco').innerHTML=p?'<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>':'<polygon points="6 4 20 12 6 20 6 4"/>'; $('pp').setAttribute('aria-label',p?'Pause':'Play'); $('pbig').classList.toggle('hide',p); }
-  function setPlaying(p){ try{ if(p) player.play(); else player.pause(); }catch(e){} }
-  player.addEventListener('play',function(){st.playing=true;setPpIcon(true);});
-  player.addEventListener('pause',function(){st.playing=false;setPpIcon(false);});
-  player.addEventListener('ended',function(){st.playing=false;setPpIcon(false);});
+
+  // --- transport engine: forward uses native playbackRate; reverse is SIMULATED by
+  //     stepping currentTime backward on a timer (HLS has no negative playbackRate). ---
+  var FPS=24;                 // browsers can't reliably expose source fps; 24 is the film default
+  var FWD=[1,2,4,8], REV=[1,2,4,8];
+  var transport={dir:0,rate:0,timer:null,last:0};
+  var ICO_PLAY='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
+  var ICO_PAUSE='<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7.5" y="5.5" width="3.2" height="13" rx="1"/><rect x="13.3" y="5.5" width="3.2" height="13" rx="1"/></svg>';
+  function cancelReverse(){ if(transport.timer){ clearInterval(transport.timer); transport.timer=null; } }
+  function startReverse(){ cancelReverse(); transport.last=performance.now(); transport.timer=setInterval(function(){ if(transport.dir>=0){ cancelReverse(); return; } var now=performance.now(),dt=(now-transport.last)/1000; transport.last=now; var nt=(player.currentTime||0)-dt*transport.rate; if(nt<=0){ try{player.currentTime=0;}catch(e){} setTransport(0,0); render(); return; } try{player.currentTime=nt;}catch(e){} render(); },50); }
+  function applyTransport(){ cancelReverse(); if(transport.dir===0){ try{player.pause();}catch(e){} } else if(transport.dir>0){ try{player.playbackRate=transport.rate;}catch(e){} player.play().catch(function(){}); } else { try{player.pause();}catch(e){} startReverse(); } updateTransportUI(); }
+  function setTransport(dir,rate){ if(!CTX.ready&&dir!==0) return; transport.dir=dir; transport.rate=rate; applyTransport(); }
+  function bumpForward(){ if(!CTX.ready) return; if(transport.dir>0){ var i=FWD.indexOf(transport.rate); setTransport(1,FWD[Math.min(i+1,FWD.length-1)]); } else setTransport(1,FWD[0]); }
+  function bumpReverse(){ if(!CTX.ready) return; if(transport.dir<0){ var i=REV.indexOf(transport.rate); setTransport(-1,REV[Math.min(i+1,REV.length-1)]); } else setTransport(-1,REV[0]); }
+  function pauseT(){ setTransport(0,0); }
+  function togglePlay(){ if(transport.dir!==0) pauseT(); else setTransport(1,1); }
+  function setPlaying(p){ if(p) setTransport(1,1); else pauseT(); }
+  function stepFrame(d){ if(!CTX.ready) return; pauseT(); var nt=Math.min(Math.max(0,(player.currentTime||0)+d*(1/FPS)),CTX.duration||0); try{player.currentTime=nt;}catch(e){} render(); }
+  function jumpTo(t){ if(!CTX.ready) return; pauseT(); var nt=Math.min(Math.max(0,t),CTX.duration||0); try{player.currentTime=nt;}catch(e){} render(); }
+  function speedLabel(){ if(transport.dir===0) return 'Paused'; var arrow=transport.dir>0?'\u25B6':'\u25C0'; var r=transport.rate; return arrow+' '+(r===0.5?'\u00bd':(''+r))+'\u00d7'; }
+  function flashKey(id){ var el=$(id); if(!el) return; el.classList.add('active'); setTimeout(function(){ el.classList.remove('active'); },150); }
+  function updateTransportUI(){ var moving=transport.dir!==0; st.playing=moving; setPpIcon(moving); var pic=$('tPlayIc'); if(pic) pic.innerHTML=moving?ICO_PAUSE:ICO_PLAY; var rev=$('tRev'),fwd=$('tFwd'),pl=$('tPlay'); if(rev)rev.classList.toggle('on',transport.dir<0); if(fwd)fwd.classList.toggle('on',transport.dir>0); if(pl)pl.classList.toggle('on',moving); var sp=$('dkSp'); if(sp)sp.textContent=speedLabel(); }
+  function deckLock(){ var d=$('deck'); if(d) d.classList.toggle('locked',!CTX.ready); }
+
+  player.addEventListener('play',function(){ updateTransportUI(); });
+  player.addEventListener('pause',function(){ updateTransportUI(); });
+  player.addEventListener('ended',function(){ transport.dir=0; transport.rate=0; cancelReverse(); updateTransportUI(); });
   player.addEventListener('timeupdate',render);
   player.addEventListener('seeking',render);
   player.addEventListener('loadedmetadata',function(){ if(player.duration&&isFinite(player.duration)){ CTX.duration=player.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } });
-  $('pp').addEventListener('click',function(){setPlaying(!st.playing);});
-  $('pbig').addEventListener('click',function(){setPlaying(true);});
+  $('pp').addEventListener('click',togglePlay);
+  $('pbig').addEventListener('click',function(){ setTransport(1,1); });
 
   function pct(t){return CTX.duration>0?(t/CTX.duration*100):0;}
-  function render(){var t=player.currentTime||0;$('cur').textContent=fmt(t);$('ph').style.left=pct(t)+'%';}
+  function render(){var t=player.currentTime||0;$('cur').textContent=fmt(t);$('ph').style.left=pct(t)+'%';var e=$('dkTc');if(e)e.textContent=fmt(t)+' / '+fmt(CTX.duration||0);}
 
   var tl=$('tl'),scrubbing=false;
   function seekFromX(cx){if(!(CTX.duration>0))return;var r=tl.getBoundingClientRect();var p=Math.min(1,Math.max(0,(cx-r.left)/r.width));try{player.currentTime=p*CTX.duration;}catch(e){}render();}
-  tl.addEventListener('pointerdown',function(e){scrubbing=true;tl.setPointerCapture(e.pointerId);seekFromX(e.clientX);});
+  tl.addEventListener('pointerdown',function(e){pauseT();scrubbing=true;tl.setPointerCapture(e.pointerId);seekFromX(e.clientX);});
   tl.addEventListener('pointermove',function(e){if(scrubbing)seekFromX(e.clientX);});
   tl.addEventListener('pointerup',function(){scrubbing=false;});
   tl.addEventListener('pointercancel',function(){scrubbing=false;});
@@ -314,6 +381,7 @@
   // entire player surface so a recipient never lands on a broken player or live controls.
   function showBlocked(kind,data){
     data=data||{};
+    try{ pauseT(); }catch(e){}
     try{ clearTimeout(loadPoll); }catch(e){}
     try{ clearTimeout(cutPoll); }catch(e){}
     try{ if(dlScrim) dlScrim.classList.remove('show'); }catch(e){}
@@ -340,7 +408,7 @@
     else player.removeAttribute('playback-token');
     player.setAttribute('playback-id', j.playbackId);
   }
-  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; hideMsg(); }
+  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; deckLock(); hideMsg(); }
   var loadPoll=null;
   function checkSend(id){ fetch('/api/sends/'+id+'/status').then(function(r){return r.json();}).then(function(j){ if(j.status==='ready'&&j.playbackId){ clearTimeout(loadPoll); loadFilm(j); } else if(j.status==='error'){ clearTimeout(loadPoll); showMsg('This film couldn\u2019t be processed.',false); } else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(function(){checkSend(id);},3000); } }).catch(function(){ loadPoll=setTimeout(function(){checkSend(id);},4000); }); }
   // Token mode: load this recipient's film + their personal budget from the server.
@@ -366,7 +434,7 @@
       if(!j) return;
       if(j.expired){ showBlocked('expired',j); return; }
       applyRecipient(j);
-      if(j.status==='ready'&&j.playbackId){ CTX.ready=true; setPlayback(j); hideMsg(); }
+      if(j.status==='ready'&&j.playbackId){ CTX.ready=true; deckLock(); setPlayback(j); hideMsg(); }
       else if(j.status==='error'){ showMsg('This film couldn\u2019t be processed.',false); }
       else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(loadByToken,3000); }
     }).catch(function(){ loadPoll=setTimeout(loadByToken,4000); });
@@ -428,18 +496,61 @@
     if(ov>0.05){c.className='candidate';c.innerHTML='Clip <b>'+fmt(st.markIn)+' \u2192 '+fmt(st.markOut)+'</b> \u00b7 <b>'+fmt(len)+'</b> \u2014 fits, but <span class="olapnote">'+fmt(ov)+' overlaps footage you already picked (counts again).</span>';add.disabled=false;return;}
     c.className='candidate ready';c.innerHTML='Clip <b>'+fmt(st.markIn)+' \u2192 '+fmt(st.markOut)+'</b> \u00b7 <b>'+fmt(len)+'</b> \u2014 fits your reel.';add.disabled=false;
   }
-  $('markInBtn').addEventListener('click',function(){exitFit();st.markIn=player.currentTime||0;if(st.markOut!=null&&st.markOut<=st.markIn)st.markOut=null;updateMarkers();});
-  $('markOutBtn').addEventListener('click',function(){exitFit();st.markOut=player.currentTime||0;updateMarkers();});
+  function doMarkIn(){ exitFit(); st.markIn=player.currentTime||0; if(st.markOut!=null&&st.markOut<=st.markIn)st.markOut=null; updateMarkers(); flashKey('markInBtn'); }
+  function doMarkOut(){ exitFit(); st.markOut=player.currentTime||0; updateMarkers(); flashKey('markOutBtn'); }
+  function clearMarks(){ exitFit(); st.markIn=null; st.markOut=null; updateMarkers(); }
+  function commitSelection(){ var b=$('addBtn'); if(b&&!b.disabled) b.click(); }
+  function removeLast(){ if(st.fit){ exitFit(); return; } if(st.segments.length){ st.segments.pop(); updateMarkers(); renderSegments(); renderBudget(); } }
+  $('markInBtn').addEventListener('click',doMarkIn);
+  $('markOutBtn').addEventListener('click',doMarkOut);
   $('addBtn').addEventListener('click',function(){
     if(st.fit){var s=st.fit.start,e=st.fit.start+st.fit.len;if(!(e>s))return;st.segments.push({in:s,out:e});st.segments.sort(function(a,b){return a.in-b.in;});st.fit=null;renderFit();updateMarkers();renderSegments();renderBudget();return;}
     if(st.markIn==null||st.markOut==null||st.markOut<=st.markIn)return;if((st.markOut-st.markIn)>remaining())return;st.segments.push({in:st.markIn,out:st.markOut});st.segments.sort(function(a,b){return a.in-b.in;});st.markIn=null;st.markOut=null;updateMarkers();renderSegments();renderBudget();
+  });
+
+  // review deck buttons (a tap does exactly what the matching key does)
+  function bindCap(id,fn,flash){ var b=$(id); if(b) b.addEventListener('click',function(){ if(!CTX.ready) return; fn(); if(flash) flashKey(id); }); }
+  bindCap('tHome',function(){ jumpTo(0); },true);
+  bindCap('tFrameBack',function(){ stepFrame(-1); },true);
+  bindCap('tRev',bumpReverse,false);
+  bindCap('tPlay',togglePlay,false);
+  bindCap('tFwd',bumpForward,false);
+  bindCap('tFrameFwd',function(){ stepFrame(1); },true);
+  bindCap('tEnd',function(){ jumpTo(CTX.duration||0); },true);
+
+  // keyboard shortcuts (NLE-style); ignored while typing in a field or before a film loads
+  function typingInField(e){ var t=e.target; if(!t) return false; var tag=(t.tagName||'').toLowerCase(); return tag==='input'||tag==='textarea'||tag==='select'||t.isContentEditable; }
+  function controlsActive(){ return CTX.ready && $('blockCard').style.display==='none'; }
+  var keysDown={};
+  document.addEventListener('keyup',function(e){ delete keysDown[(e.key||'').toLowerCase()]; });
+  document.addEventListener('keydown',function(e){
+    if(typingInField(e)) return;
+    var k=e.key, lk=(k||'').toLowerCase();
+    keysDown[lk]=true;
+    if(!controlsActive()) return;
+    if(e.repeat && lk!=='arrowleft' && lk!=='arrowright') return; // only frame-step keys may auto-repeat
+    switch(k){
+      case ' ': case 'Spacebar': e.preventDefault(); togglePlay(); flashKey('tPlay'); break;
+      case 'k': case 'K': pauseT(); flashKey('tPlay'); break;
+      case 'j': case 'J': if(keysDown['k']) setTransport(-1,0.5); else bumpReverse(); flashKey('tRev'); break;
+      case 'l': case 'L': if(keysDown['k']) setTransport(1,0.5); else bumpForward(); flashKey('tFwd'); break;
+      case 'ArrowLeft': e.preventDefault(); stepFrame(-1); flashKey('tFrameBack'); break;
+      case 'ArrowRight': e.preventDefault(); stepFrame(1); flashKey('tFrameFwd'); break;
+      case 'Home': e.preventDefault(); jumpTo(0); flashKey('tHome'); break;
+      case 'End': e.preventDefault(); jumpTo(CTX.duration||0); flashKey('tEnd'); break;
+      case 'i': case 'I': if(e.shiftKey){ if(st.markIn!=null) jumpTo(st.markIn); } else doMarkIn(); break;
+      case 'o': case 'O': if(e.shiftKey){ if(st.markOut!=null) jumpTo(st.markOut); } else doMarkOut(); break;
+      case 'Escape': clearMarks(); break;
+      case 'Enter': commitSelection(); break;
+      case 'Backspace': case 'Delete': e.preventDefault(); removeLast(); break;
+    }
   });
 
   // fit-to-remaining: button toggles the block; the block is draggable along the timeline
   $('fitBtn').addEventListener('click',function(){ if(st.fit) exitFit(); else enterFit(); });
   (function(){
     var fb=$('fitBlock'),fbDrag=false,fbOffset=0;
-    fb.addEventListener('pointerdown',function(e){ if(!st.fit)return; e.stopPropagation(); fbDrag=true; try{fb.setPointerCapture(e.pointerId);}catch(e2){} var r=tl.getBoundingClientRect(); fbOffset=e.clientX-(r.left+(st.fit.start/((CTX.duration)||1))*r.width); fb.classList.add('grabbing'); });
+    fb.addEventListener('pointerdown',function(e){ if(!st.fit)return; e.stopPropagation(); pauseT(); fbDrag=true; try{fb.setPointerCapture(e.pointerId);}catch(e2){} var r=tl.getBoundingClientRect(); fbOffset=e.clientX-(r.left+(st.fit.start/((CTX.duration)||1))*r.width); fb.classList.add('grabbing'); });
     fb.addEventListener('pointermove',function(e){ if(!fbDrag||!st.fit)return; e.stopPropagation(); var r=tl.getBoundingClientRect(); var startFrac=(e.clientX-fbOffset-r.left)/r.width; var start=Math.min(Math.max(0,startFrac*(CTX.duration||0)),Math.max(0,(CTX.duration||0)-st.fit.len)); st.fit.start=start; renderFit(); renderOverlap(); updateCandidate(); try{player.currentTime=start;}catch(e2){} render(); });
     function end(e){ if(!fbDrag)return; fbDrag=false; try{fb.releasePointerCapture(e.pointerId);}catch(e2){} fb.classList.remove('grabbing'); }
     fb.addEventListener('pointerup',end); fb.addEventListener('pointercancel',end);
@@ -467,6 +578,7 @@
     $('fill').style.width=Math.min(100,p)+'%';$('fill').classList.toggle('full',rem<=Math.min(10,CTX.budget*0.1));
     var n=st.segments.length;$('barBig').textContent=n?(n+' '+(n===1?'clip':'clips')+' \u00b7 '+fmt(u)):'No clips yet';
     $('barFill').style.width=Math.min(100,p)+'%';$('dlBtn').disabled=(n===0)||(sp<=0.05);updateCandidate();
+    var bg=$('dkBg');if(bg)bg.textContent=fmt(u)+' of '+fmt(CTX.budget);deckLock();
   }
 
   var dlScrim=$('dlScrim'),dlModal=$('dlModal'),cutPoll=null;
@@ -538,7 +650,7 @@
   $('dlBtn').addEventListener('click',startCut);
   dlScrim.addEventListener('click',function(e){if(e.target===dlScrim)dlScrim.classList.remove('show');});
 
-  render();updateMarkers();renderSegments();renderBudget();
+  render();updateMarkers();renderSegments();renderBudget();updateTransportUI();
 })();
 </script>
 </body>
