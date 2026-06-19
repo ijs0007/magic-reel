@@ -175,6 +175,10 @@
     .markrow{gap:8px}
     .markrow .mr-l,.markrow .mr-r{display:contents}
     .mbtn2{flex:1 1 0;width:auto;max-width:none;height:48px}
+    #fitBtn{order:1}
+    #markInBtn{order:2}
+    #markOutBtn{order:3}
+    #addBtn{order:4}
   }
 
   /* transport / review deck — keyboard legend on desktop, tap controls on mobile */
@@ -319,7 +323,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.9.0 &mdash; &#128072; Recipient scrub &amp; touch: reliable drag, swipe-to-scrub, no-zoom controls</footer>
+  <footer class="ver">Magic Reel &middot; v0.9.1 &mdash; &#10024; Scrub polish: smoother seeking, mobile button order</footer>
 </div>
 
 <div class="bar">
@@ -415,20 +419,28 @@
     tz.addEventListener('pointerdown',function(e){ if(!controlsActive())return; id=e.pointerId; sx=e.clientX; sy=e.clientY; st0=player.currentTime||0; mode=0; });
     tz.addEventListener('pointermove',function(e){ if(id===null||e.pointerId!==id)return; var dx=e.clientX-sx, dy=e.clientY-sy;
       if(mode===0){ if(Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)){ mode=1; pauseT(); try{tz.setPointerCapture(id);}catch(_){}} else return; }
-      e.preventDefault(); var w=tz.getBoundingClientRect().width||1; var nt=st0+(dx/w)*(CTX.duration||0); nt=Math.min(Math.max(0,nt),CTX.duration||0); try{player.currentTime=nt;}catch(_){} render(); });
-    function done(e){ if(id===null||(typeof e.pointerId==='number'&&e.pointerId!==id))return; if(mode===1){ try{tz.releasePointerCapture(id);}catch(_){} } else { togglePlay(); } id=null; mode=0; }
+      e.preventDefault(); var w=tz.getBoundingClientRect().width||1; var nt=st0+(dx/w)*(CTX.duration||0); queueSeek(nt); });
+    function done(e){ if(id===null||(typeof e.pointerId==='number'&&e.pointerId!==id))return; if(mode===1){ try{tz.releasePointerCapture(id);}catch(_){} commitSeek(); } else { togglePlay(); } id=null; mode=0; }
     tz.addEventListener('pointerup',done); tz.addEventListener('pointercancel',done);
   })();
 
   function pct(t){return CTX.duration>0?(t/CTX.duration*100):0;}
-  function render(){var t=player.currentTime||0;$('cur').textContent=fmt(t);$('ph').style.left=pct(t)+'%';var e=$('dkTc');if(e)e.textContent=fmt(t)+' / '+fmt(CTX.duration||0);}
+  function render(){if(_seeking)return;var t=player.currentTime||0;$('cur').textContent=fmt(t);$('ph').style.left=pct(t)+'%';var e=$('dkTc');if(e)e.textContent=fmt(t)+' / '+fmt(CTX.duration||0);}
+  // Scrub seeking coalesced to one seek per animation frame, so a fast drag doesn't hammer
+  // the HLS decoder (smoother picture). The playhead/timecode update on every move (responsive);
+  // _seeking makes render() defer to us during a drag so they don't fight. Frame-accurate
+  // preview scrubbing would need a Mux storyboard/thumbnail track.
+  var _seekRAF=null,_seekTo=null,_seeking=false;
+  function _applySeek(){ _seekRAF=null; if(_seekTo==null)return; var t=_seekTo; _seekTo=null; try{player.currentTime=t;}catch(_){} }
+  function queueSeek(t){ if(!(CTX.duration>0))return; _seeking=true; _seekTo=Math.min(Math.max(0,t),CTX.duration); $('ph').style.left=pct(_seekTo)+'%'; var c=$('cur'); if(c)c.textContent=fmt(_seekTo); if(!_seekRAF)_seekRAF=requestAnimationFrame(_applySeek); }
+  function commitSeek(){ if(_seekRAF){cancelAnimationFrame(_seekRAF);_seekRAF=null;} if(_seekTo!=null){var t=_seekTo;_seekTo=null;try{player.currentTime=t;}catch(_){}} _seeking=false; render(); }
 
   var tl=$('tl'),scrubbing=false;
-  function seekFromX(cx){if(!(CTX.duration>0))return;var r=tl.getBoundingClientRect();var p=Math.min(1,Math.max(0,(cx-r.left)/r.width));try{player.currentTime=p*CTX.duration;}catch(e){}render();}
+  function seekFromX(cx){if(!(CTX.duration>0))return;var r=tl.getBoundingClientRect();var p=Math.min(1,Math.max(0,(cx-r.left)/r.width));queueSeek(p*CTX.duration);}
   tl.addEventListener('pointerdown',function(e){e.preventDefault();pauseT();scrubbing=true;try{tl.setPointerCapture(e.pointerId);}catch(_){}seekFromX(e.clientX);});
   tl.addEventListener('pointermove',function(e){if(scrubbing){e.preventDefault();seekFromX(e.clientX);}});
-  tl.addEventListener('pointerup',function(){scrubbing=false;});
-  tl.addEventListener('pointercancel',function(){scrubbing=false;});
+  tl.addEventListener('pointerup',function(){scrubbing=false;commitSeek();});
+  tl.addEventListener('pointercancel',function(){scrubbing=false;commitSeek();});
 
   // --- load the most recent uploaded film ---
   var stageMsg=$('stageMsg');
