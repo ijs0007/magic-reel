@@ -119,9 +119,19 @@
   .cliprow .cl{font-weight:500;font-variant-numeric:tabular-nums}
   .muted{font-size:12.5px;color:var(--text-soft);margin:0}
 
-  .caprow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
+  .caprow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;row-gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
   .caprow .ct{font-size:13px}
   .caprow .ct small{display:block;font-size:11px;color:var(--text-soft);margin-top:1px}
+  .capedit{display:flex;align-items:center;gap:5px;margin-left:auto}
+  .capedit .tnum{width:48px;font-family:inherit;font-size:14px;text-align:center;padding:7px 5px;border:1px solid var(--border);border-radius:8px;background:var(--field);color:var(--text);-moz-appearance:textfield;appearance:textfield}
+  .capedit .tnum::-webkit-outer-spin-button,.capedit .tnum::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .capedit .tnum:focus{outline:none;border-color:var(--accent)}
+  .capedit .tnum.bad{border-color:var(--err)}
+  .capedit .colon{color:var(--text-soft);font-size:15px}
+  .capsave{border:1px solid var(--accent);background:var(--accent);color:var(--accent-text);border-radius:8px;padding:7px 12px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;margin-left:3px;transition:opacity .15s,background .15s,color .15s}
+  .capsave:disabled{cursor:default;background:transparent;color:var(--text-soft);border-color:var(--border)}
+  .caphint{font-size:11px;color:var(--text-soft);text-align:right;margin:6px 2px 0;min-height:14px}
+  .caphint.warn{color:var(--err)}
   select.msm{font-family:inherit;font-size:14px;padding:8px 30px 8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-webkit-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6a64' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
   select.msm:focus{outline:none;border-color:var(--accent)}
   .actrow{display:flex;gap:9px;margin-top:10px}
@@ -159,7 +169,7 @@
 
   <div id="detailView" class="hidden"></div>
 
-  <footer class="ver">Magic Reel &middot; v0.7.0 &mdash; &#128202; Dashboard: live sends &amp; usage</footer>
+  <footer class="ver">Magic Reel &middot; v0.8.3 &mdash; &#127899;&#65039; Dashboard actions: resend, nudge, bump budget</footer>
 </div>
 
 <div class="scrim" id="sheetScrim"><div class="sheet" id="recSheet"></div></div>
@@ -269,19 +279,84 @@
       reel='<p class="muted">'+(jOpen?'Opened the link but hasn&rsquo;t downloaded anything yet.':'Hasn&rsquo;t opened the link yet.')+'</p>';
     }
     var link=location.origin+'/r/'+r.token;
+    var hasEmail=!!(r.email&&r.email.trim());
     recSheet.innerHTML=
       '<div class="sheet-top"><div class="ava" style="background:'+avaColor(r.token)+'">'+initials(r.name)+'</div><div class="who"><h4>'+esc(r.name)+' '+chip+'</h4><span>'+esc(r.email||'')+'</span></div></div>'+
       '<div class="sheet-body">'+
         '<div class="fsec">Progress</div>'+journey+
         '<div class="fsec">Their reel</div>'+reel+
         '<div class="fsec">Allowance</div>'+
-        '<div class="caprow"><div class="ct">Download cap<small>Total '+esc((r.name||'').split(' ')[0])+' can pull from this link</small></div><span style="font-weight:600;font-variant-numeric:tabular-nums">'+fmt(r.cap)+'</span></div>'+
+        '<div class="caprow"><div class="ct">Download cap<small>Total '+esc((r.name||'').split(' ')[0])+' can pull from this link</small></div>'+
+          '<div class="capedit">'+
+            '<input class="tnum" id="capMin" type="number" min="0" max="10" inputmode="numeric" aria-label="minutes" value="'+Math.floor(r.cap/60)+'">'+
+            '<span class="colon">:</span>'+
+            '<input class="tnum" id="capSec" type="number" min="0" max="59" inputmode="numeric" aria-label="seconds" value="'+(r.cap%60)+'">'+
+            '<button class="capsave" id="capSave" disabled>Save</button>'+
+          '</div>'+
+        '</div>'+
+        '<div class="caphint" id="capHint">&nbsp;</div>'+
+        '<div class="fsec">Actions</div>'+
         '<div class="actrow"><button class="btn-sec" id="copyBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy link</button></div>'+
+        '<div class="actrow">'+
+          '<button class="btn-sec" id="resendBtn"'+(hasEmail?'':' disabled')+'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>Resend link</button>'+
+          '<button class="btn-sec" id="nudgeBtn"'+(hasEmail?'':' disabled')+'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Nudge</button>'+
+        '</div>'+
+        (hasEmail?'':'<p class="muted" style="margin-top:8px">No email on file \u2014 add one in Magic Story Maker to email '+esc((r.name||'this person').split(' ')[0])+'.</p>')+
       '</div>'+
       '<button class="sheet-close" id="closeSheet">Close</button>';
     sheetScrim.classList.add('show');
     $('copyBtn').addEventListener('click',function(){copyText(link);toast('Private link copied');});
     $('closeSheet').addEventListener('click',function(){sheetScrim.classList.remove('show');});
+
+    /* budget editor (min:sec, same 0:01–10:00 bounds as the send screen) */
+    var capMin=$('capMin'),capSec=$('capSec'),capSave=$('capSave'),capHint=$('capHint');
+    function curCap(){var m=parseInt(capMin.value,10),s=parseInt(capSec.value,10);if(!isFinite(m))m=0;if(!isFinite(s))s=0;return m*60+s;}
+    function refreshCapState(){
+      capMin.classList.remove('bad');capSec.classList.remove('bad');capHint.className='caphint';
+      var s=parseInt(capSec.value,10);
+      if(!isFinite(s)||s<0||s>59){capSec.classList.add('bad');capHint.textContent='Seconds must be 0\u201359';capHint.className='caphint warn';capSave.disabled=true;return;}
+      var total=curCap();
+      if(total<1){capSave.disabled=true;capSec.classList.add('bad');capHint.textContent='At least 0:01';capHint.className='caphint warn';return;}
+      if(total>600){capSave.disabled=true;capMin.classList.add('bad');capHint.textContent='Max is 10:00';capHint.className='caphint warn';return;}
+      if(total===r.cap){capSave.disabled=true;capHint.innerHTML='&nbsp;';return;}
+      capSave.disabled=false;capHint.textContent='Change '+fmt(r.cap)+' \u2192 '+fmt(total);
+    }
+    capMin.addEventListener('input',refreshCapState);
+    capSec.addEventListener('input',refreshCapState);
+    capSave.addEventListener('click',function(){
+      var total=curCap();if(total<1||total>600)return;
+      capSave.disabled=true;capSave.textContent='Saving\u2026';
+      fetch('/api/recipients/'+r.token+'/budget',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({budgetSeconds:total})})
+        .then(function(res){return res.json().then(function(j){return {ok:res.ok,j:j};});})
+        .then(function(o){
+          if(!o.ok){capSave.textContent='Save';capHint.textContent=(o.j&&o.j.error)||'Couldn\u2019t save.';capHint.className='caphint warn';return;}
+          r.cap=o.j.budgetSeconds;
+          refreshDetailRow(send,i);
+          toast('Cap updated to '+fmt(r.cap));
+          openRecipient(send,i); /* re-render so meter + remaining stay in sync */
+        })
+        .catch(function(){capSave.textContent='Save';capHint.textContent='Network error \u2014 try again.';capHint.className='caphint warn';});
+    });
+
+    /* resend + nudge */
+    function emailAction(btn,kind,okMsg){
+      if(!btn)return;
+      btn.disabled=true;var old=btn.innerHTML;btn.textContent='Sending\u2026';
+      fetch('/api/recipients/'+r.token+'/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+        .then(function(res){return res.json().then(function(j){return {ok:res.ok,j:j};});})
+        .then(function(o){
+          btn.innerHTML=old;btn.disabled=false;
+          if(o.ok&&o.j&&o.j.emailed)toast(okMsg);
+          else if(o.j&&o.j.reason==='not-configured')toast('Email isn\u2019t set up on the server yet.');
+          else toast((o.j&&o.j.error)||'Couldn\u2019t send the email.');
+        })
+        .catch(function(){btn.innerHTML=old;btn.disabled=false;toast('Network error \u2014 try again.');});
+    }
+    if(hasEmail){
+      $('resendBtn').addEventListener('click',function(){emailAction($('resendBtn'),'resend','Link resent to '+(r.name||'them'));});
+      $('nudgeBtn').addEventListener('click',function(){emailAction($('nudgeBtn'),'nudge','Nudge sent to '+(r.name||'them'));});
+    }
+    refreshCapState();
   }
   function jstep(done,label,time){return '<div class="jstep'+(done?' done':'')+'"><span class="jdot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="jlabel">'+label+'</span><span class="jtime">'+time+'</span></div>';}
   function refreshDetailRow(send,i){

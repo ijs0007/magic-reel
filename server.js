@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.8.0 — 🔗 Roster: MSM cast/crew + app-wide login';
+const APP_VERSION = 'v0.8.3 — 🎛️ Dashboard actions: resend, nudge, bump budget';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -76,6 +76,13 @@ function resendConfigured() { return !!(RESEND_API_KEY && CALLSHEET_FROM); }
 function fmtClock(s) { s = Math.max(0, Math.round(Number(s) || 0)); const m = Math.floor(s / 60), ss = s % 60; return m + ':' + (ss < 10 ? '0' : '') + ss; }
 function emailEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+// The public origin to build recipient links from: prefer the request Origin header,
+// fall back to the Host. Shared by the mint + resend/nudge endpoints so links are
+// built one way everywhere.
+function reqBase(req) {
+  return (req.headers.origin && /^https?:\/\//.test(req.headers.origin)) ? req.headers.origin : ('https://' + (req.headers.host || ''));
+}
+
 async function sendReelEmail(to, name, link, filmName, budgetSeconds) {
   if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
   to = String(to || '').trim();
@@ -97,6 +104,35 @@ async function sendReelEmail(to, name, link, filmName, budgetSeconds) {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Pick your reel selects \u2014 ' + (namedFilm ? filmName : 'your footage'), html })
+    });
+    if (!r.ok) { const d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
+    return { ok: true };
+  } catch (e) { return { ok: false, reason: 'exception', detail: e.message }; }
+}
+
+// A gentler reminder email (same look as the original send, reminder copy). Used by
+// the dashboard "Nudge" action for recipients who haven't finished.
+async function sendReelNudgeEmail(to, name, link, filmName, budgetSeconds) {
+  if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
+  to = String(to || '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return { ok: false, reason: 'no-recipient' };
+  const namedFilm = filmName && filmName !== 'Untitled';
+  const filmPhrase = namedFilm ? '\u201c' + emailEsc(filmName) + '\u201d' : 'your footage';
+  const cap = fmtClock(budgetSeconds);
+  const html =
+    '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.6;max-width:520px;margin:0 auto;">' +
+    '<p style="font-size:16px;margin:0 0 14px;">Hi ' + emailEsc(name || 'there') + ',</p>' +
+    '<p style="margin:0 0 14px;">Just a quick nudge \u2014 your reel selects from ' + filmPhrase + ' are still waiting. Open your private link, mark the moments you want (up to <strong>' + cap + '</strong>), and download a clean, watermark-free cut whenever you\u2019re ready.</p>' +
+    '<p style="margin:26px 0;"><a href="' + link + '" style="background:#7c4dff;color:#fff;text-decoration:none;font-weight:600;padding:13px 22px;border-radius:10px;display:inline-block;">Open your reel</a></p>' +
+    '<p style="color:#777;font-size:13px;margin:0 0 4px;">Or paste this into your browser:</p>' +
+    '<p style="color:#7c4dff;word-break:break-all;font-size:13px;margin:0;">' + emailEsc(link) + '</p>' +
+    '<p style="color:#999;font-size:12px;margin-top:26px;">This link is just for you \u2014 please don\u2019t share it.</p>' +
+    '</div>';
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Reminder: pick your reel selects \u2014 ' + (namedFilm ? filmName : 'your footage'), html })
     });
     if (!r.ok) { const d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
     return { ok: true };
@@ -728,12 +764,73 @@ app.post('/api/recipients', async (req, res) => {
     // Email the link only on an explicit notify (so test mints never fire mail).
     let emailed = false;
     if (b.notify === true && email && resendConfigured()) {
-      const base = (req.headers.origin && /^https?:\/\//.test(req.headers.origin)) ? req.headers.origin : ('https://' + (req.headers.host || ''));
+      const base = reqBase(req);
       const out = await sendReelEmail(email, name, base + '/r/' + token, s.rows[0].film_name, budget);
       emailed = !!(out && out.ok);
       if (!emailed) console.warn('[reel-email] not sent to', email, '-', out && out.reason, out && out.detail ? ('(' + out.detail + ')') : '');
     }
     res.json({ token: token, link: '/r/' + token, name: name, email: email, budgetSeconds: budget, emailed: emailed });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Dashboard actions on an existing recipient (owner-gated by the app gate).
+//     Keyed by the recipient's token (the reel_recipients primary key). ---
+
+// Shared lookup: a recipient joined to their send (name, email, budget, film).
+async function loadRecipient(token) {
+  const q = await pool.query(
+    'SELECT rec.token, rec.name, rec.email, rec.budget_seconds, rec.used_seconds, s.film_name' +
+    ' FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
+    [token]);
+  return q.rows.length ? q.rows[0] : null;
+}
+
+// Resend a recipient their original private-link email.
+app.post('/api/recipients/:token/resend', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const r = await loadRecipient(req.params.token);
+    if (!r) return res.status(404).json({ error: 'No such recipient.' });
+    if (!r.email) return res.status(400).json({ error: 'No email on file for this recipient.' });
+    if (!resendConfigured()) return res.json({ ok: false, emailed: false, reason: 'not-configured' });
+    const out = await sendReelEmail(r.email, r.name, reqBase(req) + '/r/' + r.token, r.film_name, r.budget_seconds);
+    if (!out.ok) console.warn('[reel-resend] not sent to', r.email, '-', out.reason, out.detail ? ('(' + out.detail + ')') : '');
+    res.json({ ok: !!out.ok, emailed: !!out.ok, reason: out.reason || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Nudge a recipient: a gentler reminder email.
+app.post('/api/recipients/:token/nudge', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const r = await loadRecipient(req.params.token);
+    if (!r) return res.status(404).json({ error: 'No such recipient.' });
+    if (!r.email) return res.status(400).json({ error: 'No email on file for this recipient.' });
+    if (!resendConfigured()) return res.json({ ok: false, emailed: false, reason: 'not-configured' });
+    const out = await sendReelNudgeEmail(r.email, r.name, reqBase(req) + '/r/' + r.token, r.film_name, r.budget_seconds);
+    if (!out.ok) console.warn('[reel-nudge] not sent to', r.email, '-', out.reason, out.detail ? ('(' + out.detail + ')') : '');
+    res.json({ ok: !!out.ok, emailed: !!out.ok, reason: out.reason || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Edit / bump a recipient's download budget. Clamped to the same 0:01–10:00 ceiling
+// as the send screen. Lowering below what's already used simply caps further pulls
+// (the meter clamps remaining to 0) — a legitimate "stop them here" action.
+app.post('/api/recipients/:token/budget', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    let budget = parseInt(req.body && req.body.budgetSeconds, 10);
+    if (!isFinite(budget) || budget <= 0) return res.status(400).json({ error: 'Enter a length of at least 1 second.' });
+    budget = Math.min(budget, MAX_CUT_SECONDS);
+    const upd = await pool.query('UPDATE reel_recipients SET budget_seconds = $1 WHERE token = $2 RETURNING token', [budget, req.params.token]);
+    if (!upd.rows.length) return res.status(404).json({ error: 'No such recipient.' });
+    res.json({ ok: true, budgetSeconds: budget });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
