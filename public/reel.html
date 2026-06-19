@@ -43,7 +43,7 @@
   .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
   .pad{padding:16px 18px}
 
-  .stage{position:relative;background:#000;aspect-ratio:16/9;width:100%;overflow:hidden}
+  .stage{position:relative;background:#000;aspect-ratio:16/9;width:100%;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-user-drag:none}
   .stage canvas{display:block;width:100%;height:100%}
   .stage mux-video{display:block;width:100%;height:100%;background:#000;--media-object-fit:contain}
   .stagemsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:#000;z-index:3}
@@ -64,7 +64,7 @@
   .tcode b{color:var(--text);font-weight:600}
 
   .tlwrap{padding:12px 16px 4px}
-  .tl{position:relative;height:32px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;overflow:hidden;touch-action:none}
+  .tl{position:relative;height:32px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
   .tl .ticks{position:absolute;inset:0;pointer-events:none;background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),rgba(0,0,0,.05) calc(10% - 1px),rgba(0,0,0,.05) 10%)}
   body.dark .tl .ticks{background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),rgba(255,255,255,.06) calc(10% - 1px),rgba(255,255,255,.06) 10%)}
   .seg{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--good) 30%,transparent);border-left:2px solid var(--good);border-right:2px solid var(--good)}
@@ -146,7 +146,7 @@
   .olapnote{color:var(--err);font-weight:600}
 
   /* v0.8.8 compact recipient layout */
-  .tapzone{position:absolute;inset:0;z-index:2;cursor:pointer}
+  .tapzone{position:absolute;inset:0;z-index:2;cursor:pointer;touch-action:pan-y;user-select:none;-webkit-user-select:none}
   .wm{z-index:1}
   .lowres{z-index:5}
   .pbig{z-index:4;pointer-events:none}
@@ -155,7 +155,7 @@
   .deck .deckhead{margin-bottom:9px}
   .markrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 16px 2px}
   .markrow .mr-l,.markrow .mr-r{display:flex;gap:8px}
-  .mbtn2{position:relative;border:1px solid var(--border);background:var(--field);border-radius:9px;cursor:pointer;color:var(--text);width:48px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:border-color .12s,background .12s,color .12s,opacity .12s;-webkit-tap-highlight-color:transparent}
+  .mbtn2{position:relative;border:1px solid var(--border);background:var(--field);border-radius:9px;cursor:pointer;color:var(--text);width:48px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:border-color .12s,background .12s,color .12s,opacity .12s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   .mbtn2:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
   .mbtn2 svg{width:18px;height:18px}
   .mbtn2 .lt{font-size:8.5px;font-weight:700;color:var(--text-soft);font-variant-numeric:tabular-nums;line-height:1}
@@ -171,7 +171,10 @@
     #deck .dk-speed,#deck .dk-budget,#tHome,#tRev,#tPlay,#tFwd,#tEnd,#deck .deckhint{display:none}
     #deck .deckhead{justify-content:center;margin-bottom:8px}
     #deck .kcaps{gap:12px}
-    #tFrameBack,#tFrameFwd{flex:0 0 auto;min-width:74px}
+    #tFrameBack,#tFrameFwd{flex:0 0 auto;min-width:84px;max-width:none;padding:11px 4px 7px}
+    .markrow{gap:8px}
+    .markrow .mr-l,.markrow .mr-r{display:contents}
+    .mbtn2{flex:1 1 0;width:auto;max-width:none;height:48px}
   }
 
   /* transport / review deck — keyboard legend on desktop, tap controls on mobile */
@@ -183,7 +186,7 @@
   .deck .dk-speed{font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:.02em}
   .deck .dk-budget{font-variant-numeric:tabular-nums}
   .kcaps{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
-  .kcap{flex:1 1 0;min-width:42px;max-width:66px;border:1px solid var(--border);background:var(--field);border-radius:10px;cursor:pointer;color:var(--text);padding:9px 4px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:transform .08s,background .12s,border-color .12s,box-shadow .12s;-webkit-tap-highlight-color:transparent}
+  .kcap{flex:1 1 0;min-width:42px;max-width:66px;border:1px solid var(--border);background:var(--field);border-radius:10px;cursor:pointer;color:var(--text);padding:9px 4px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:transform .08s,background .12s,border-color .12s,box-shadow .12s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   .kcap.wide{flex:1.4 1 0;max-width:86px}
   .kcap:hover{border-color:var(--accent)}
   .kcap:active{transform:translateY(1px)}
@@ -253,7 +256,7 @@
 
   <div class="card">
     <div class="stage" id="stage">
-      <mux-video id="player" stream-type="on-demand" max-resolution="480p" playsinline></mux-video>
+      <mux-video id="player" stream-type="on-demand" max-resolution="480p" playsinline draggable="false"></mux-video>
       <div class="wm" id="wm"></div>
       <div class="lowres" id="lowres">PREVIEW &middot; watermarked &middot; low-res</div>
       <div class="tapzone" id="tapzone"></div>
@@ -316,7 +319,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.8.8 &mdash; &#128241; Recipient page: compact NLE layout, tap-to-play, deck under the video</footer>
+  <footer class="ver">Magic Reel &middot; v0.9.0 &mdash; &#128072; Recipient scrub &amp; touch: reliable drag, swipe-to-scrub, no-zoom controls</footer>
 </div>
 
 <div class="bar">
@@ -404,15 +407,26 @@
   player.addEventListener('seeking',render);
   player.addEventListener('loadedmetadata',function(){ if(player.duration&&isFinite(player.duration)){ CTX.duration=player.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } });
   $('pp')&&$('pp').addEventListener('click',togglePlay);
-  $('tapzone').addEventListener('click',function(){ if(controlsActive()) togglePlay(); });
+  // Video surface: a tap toggles play/pause; a horizontal drag scrubs ("scan with your hand").
+  // Vertical drags fall through to page scroll (touch-action:pan-y). Capture only once we know
+  // it's a horizontal scrub, so we never hijack a scroll.
+  (function(){
+    var tz=$('tapzone'), id=null, sx=0, sy=0, st0=0, mode=0; // mode 0=undecided 1=scrub
+    tz.addEventListener('pointerdown',function(e){ if(!controlsActive())return; id=e.pointerId; sx=e.clientX; sy=e.clientY; st0=player.currentTime||0; mode=0; });
+    tz.addEventListener('pointermove',function(e){ if(id===null||e.pointerId!==id)return; var dx=e.clientX-sx, dy=e.clientY-sy;
+      if(mode===0){ if(Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)){ mode=1; pauseT(); try{tz.setPointerCapture(id);}catch(_){}} else return; }
+      e.preventDefault(); var w=tz.getBoundingClientRect().width||1; var nt=st0+(dx/w)*(CTX.duration||0); nt=Math.min(Math.max(0,nt),CTX.duration||0); try{player.currentTime=nt;}catch(_){} render(); });
+    function done(e){ if(id===null||(typeof e.pointerId==='number'&&e.pointerId!==id))return; if(mode===1){ try{tz.releasePointerCapture(id);}catch(_){} } else { togglePlay(); } id=null; mode=0; }
+    tz.addEventListener('pointerup',done); tz.addEventListener('pointercancel',done);
+  })();
 
   function pct(t){return CTX.duration>0?(t/CTX.duration*100):0;}
   function render(){var t=player.currentTime||0;$('cur').textContent=fmt(t);$('ph').style.left=pct(t)+'%';var e=$('dkTc');if(e)e.textContent=fmt(t)+' / '+fmt(CTX.duration||0);}
 
   var tl=$('tl'),scrubbing=false;
   function seekFromX(cx){if(!(CTX.duration>0))return;var r=tl.getBoundingClientRect();var p=Math.min(1,Math.max(0,(cx-r.left)/r.width));try{player.currentTime=p*CTX.duration;}catch(e){}render();}
-  tl.addEventListener('pointerdown',function(e){pauseT();scrubbing=true;tl.setPointerCapture(e.pointerId);seekFromX(e.clientX);});
-  tl.addEventListener('pointermove',function(e){if(scrubbing)seekFromX(e.clientX);});
+  tl.addEventListener('pointerdown',function(e){e.preventDefault();pauseT();scrubbing=true;try{tl.setPointerCapture(e.pointerId);}catch(_){}seekFromX(e.clientX);});
+  tl.addEventListener('pointermove',function(e){if(scrubbing){e.preventDefault();seekFromX(e.clientX);}});
   tl.addEventListener('pointerup',function(){scrubbing=false;});
   tl.addEventListener('pointercancel',function(){scrubbing=false;});
 
@@ -596,7 +610,7 @@
   $('fitBtn').addEventListener('click',function(){ if(st.fit) exitFit(); else enterFit(); });
   (function(){
     var fb=$('fitBlock'),fbDrag=false,fbOffset=0;
-    fb.addEventListener('pointerdown',function(e){ if(!st.fit)return; e.stopPropagation(); pauseT(); fbDrag=true; try{fb.setPointerCapture(e.pointerId);}catch(e2){} var r=tl.getBoundingClientRect(); fbOffset=e.clientX-(r.left+(st.fit.start/((CTX.duration)||1))*r.width); fb.classList.add('grabbing'); });
+    fb.addEventListener('pointerdown',function(e){ if(!st.fit)return; e.preventDefault(); e.stopPropagation(); pauseT(); fbDrag=true; try{fb.setPointerCapture(e.pointerId);}catch(e2){} var r=tl.getBoundingClientRect(); fbOffset=e.clientX-(r.left+(st.fit.start/((CTX.duration)||1))*r.width); fb.classList.add('grabbing'); });
     fb.addEventListener('pointermove',function(e){ if(!fbDrag||!st.fit)return; e.stopPropagation(); var r=tl.getBoundingClientRect(); var startFrac=(e.clientX-fbOffset-r.left)/r.width; var start=Math.min(Math.max(0,startFrac*(CTX.duration||0)),Math.max(0,(CTX.duration||0)-st.fit.len)); st.fit.start=start; renderFit(); renderOverlap(); updateCandidate(); try{player.currentTime=start;}catch(e2){} render(); });
     function end(e){ if(!fbDrag)return; fbDrag=false; try{fb.releasePointerCapture(e.pointerId);}catch(e2){} fb.classList.remove('grabbing'); }
     fb.addEventListener('pointerup',end); fb.addEventListener('pointercancel',end);
