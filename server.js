@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.3 — 🎞️ Real source fps: accurate frame-step from Mux';
+const APP_VERSION = 'v0.9.4 — 🧹 Auto-cleanup: shorten a send to 24h once everyone has downloaded';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -509,6 +509,7 @@ const MAX_RANGES = 25;          // a reel shouldn't need more cuts than this
 const MIN_CLIP_SECONDS = 0.5;   // Mux requires clips of at least 500 ms
 const MAX_ASSETS = 8;           // hard floor: never hold more than this many live master assets (Mux free tier caps at 10; leaves headroom for transient clip-assets)
 const LINK_TTL_DAYS = 14;       // a recipient link (and its master asset) lives this long, then is cleaned up
+const FULLY_DOWNLOADED_GRACE_HOURS = 24; // once EVERY recipient has pulled a cut, shorten the link's life to this so footage doesn't linger the full TTL
 const POLL_MS = 2500;
 const CLIP_TIMEOUT_MS = 6 * 60 * 1000;
 const STITCH_TIMEOUT_MS = 3 * 60 * 1000;
@@ -1054,7 +1055,23 @@ module.exports = {
   MIN_CLIP_SECONDS, MAX_CUT_SECONDS, MAX_RANGES, MAX_ASSETS, LINK_TTL_DAYS, APP_VERSION
 };
 
+// Footage that's served its purpose: once EVERY recipient on a send has pulled a cut,
+// shorten the link's life to FULLY_DOWNLOADED_GRACE_HOURS so the master is cleaned up soon
+// instead of lingering the full TTL. Hard guards: needs >=1 recipient AND every one of them
+// downloaded (used_seconds > 0.05, the same "downloaded" signal the asset floor uses); only
+// ever shortens (never extends), and is idempotent once a send is already inside the window.
+async function accelerateFullyDownloaded() {
+  if (!pool || !muxConfigured()) return;
+  await pool.query(
+    "UPDATE reel_sends s SET expires_at = now() + interval '" + FULLY_DOWNLOADED_GRACE_HOURS + " hours'" +
+    " WHERE s.asset_id IS NOT NULL AND s.asset_deleted_at IS NULL" +
+    " AND (s.expires_at IS NULL OR s.expires_at > now() + interval '" + FULLY_DOWNLOADED_GRACE_HOURS + " hours')" +
+    " AND EXISTS (SELECT 1 FROM reel_recipients r WHERE r.send_id = s.id)" +
+    " AND NOT EXISTS (SELECT 1 FROM reel_recipients r WHERE r.send_id = s.id AND r.used_seconds <= 0.05)");
+}
+
 function runRetention() {
+  accelerateFullyDownloaded().catch(function (e) { console.warn('[reel-retention] accelerate:', e.message); });
   cleanupExpiredSends().catch(function (e) { console.warn('[reel-retention] cleanup:', e.message); });
   enforceAssetFloor().catch(function (e) { console.warn('[reel-retention] floor:', e.message); });
 }
