@@ -248,7 +248,7 @@
   </header>
 
   <h1 class="title">Send selects</h1>
-  <p class="sub">Pick who gets reels and set the length, then drop your film &mdash; it uploads and sends on its own.</p>
+  <p class="sub">Pick who gets reels, set the length, then drop your film &mdash; it sends on its own.</p>
 
   <!-- STEP 1 -->
   <div class="card" id="whoCard">
@@ -328,7 +328,7 @@
     <div id="upPreview" class="up-preview hidden"></div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.15 &mdash; &#127919; Drop-to-send</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.16 &mdash; &#127919; Drop-to-send</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -410,7 +410,7 @@
       var url=URL.createObjectURL(file),v=document.createElement('video');
       v.preload='metadata';v.muted=true;v.src=url;
       v.addEventListener('loadedmetadata',function(){state.file.duration=v.duration;var d=fmtDur(v.duration);fmeta.textContent=fmtSize(file.size)+(d?' \u00b7 '+d:'');try{v.currentTime=Math.min(1,v.duration/2);}catch(e){}});
-      v.addEventListener('seeked',function(){try{var c=document.createElement('canvas');c.width=160;c.height=90;c.getContext('2d').drawImage(v,0,0,160,90);thumb.innerHTML='<img alt="frame" src="'+c.toDataURL('image/jpeg',0.7)+'">';if(state.file.duration){var b=document.createElement('span');b.className='badge';b.textContent=fmtDur(state.file.duration);thumb.appendChild(b);}URL.revokeObjectURL(url);}catch(e){}});
+      v.addEventListener('seeked',function(){try{var c=document.createElement('canvas');var vw=v.videoWidth||16,vh=v.videoHeight||9;var sc=Math.min(1,240/Math.max(vw,vh));c.width=Math.max(1,Math.round(vw*sc));c.height=Math.max(1,Math.round(vh*sc));c.getContext('2d').drawImage(v,0,0,c.width,c.height);thumb.innerHTML='<img alt="frame" src="'+c.toDataURL('image/jpeg',0.7)+'">';if(state.file.duration){var b=document.createElement('span');b.className='badge';b.textContent=fmtDur(state.file.duration);thumb.appendChild(b);}URL.revokeObjectURL(url);}catch(e){}});
       v.addEventListener('error',function(){try{URL.revokeObjectURL(url);}catch(e){}});
     }catch(e){}
     refresh();
@@ -690,7 +690,7 @@
   /* ---- send: mint a private link per recipient (auto-email is the next step) ---- */
   var processScrim=$('processScrim'),processModal=$('processModal');
   function renderMinting(){
-    processModal.innerHTML='<h3>Creating private links</h3><p class="lede">Minting a unique, watermarked link for each recipient&hellip;</p><div class="pipe"><div class="pl active"><span class="dot"><span class="spin"></span></span>Creating links</div></div>';
+    processModal.innerHTML='<h3>Creating links</h3><p class="lede">One private link per person&hellip;</p><div class="pipe"><div class="pl active"><span class="dot"><span class="spin"></span></span>Creating links</div></div>';
   }
   function fallbackCopy(text){try{var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');document.body.removeChild(ta);}catch(e){}}
   function renderResults(results,errors){
@@ -700,17 +700,17 @@
     results.forEach(function(r){var col=r.rec.kind==='person'?avaColor(r.rec.pid):avaColor(r.rec.id);
       var sent=r.emailed?'<span class="emailed">Emailed</span>':'';
       list+='<div class="sr"><div class="ava" style="background:'+col+'">'+initials(r.rec.name)+'</div>'+
-        '<div class="si"><div class="nm">'+esc(r.rec.name)+sent+'</div><div class="em">'+esc(r.rec.email)+' \u00b7 '+fmt(effCap(r.rec))+'</div><div class="lk">'+esc(r.url)+'</div></div>'+
-        '<button class="cpbtn" data-url="'+esc(r.url)+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button></div>';
+        '<div class="si"><div class="nm">'+esc(r.rec.name)+sent+'</div></div>'+
+        '<button class="cpbtn" data-url="'+esc(r.url)+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy link</button></div>';
     });
     list+='</div>';
     var errHTML=errors.length?('<p class="note2" style="color:var(--err)">Couldn\u2019t create '+errors.length+' ('+errors.map(function(e){return esc(e.name);}).join(', ')+') \u2014 try Send again.</p>'):'';
     var lede;
     if(!results.length) lede='Something went wrong creating the links.';
-    else if(allEmailed) lede='Each person got an email with their private link. The links are below too, just in case.';
-    else if(anyEmailed) lede='Some were emailed automatically; copy and send the rest below.';
-    else lede='Copy each link and send it to the person. (Auto-email turns on once your Resend key is set.)';
-    var title=!results.length?'No links created':(allEmailed?'Links sent':'Private links ready');
+    else if(allEmailed) lede='Everyone’s been emailed their link.';
+    else if(anyEmailed) lede='Some were emailed — copy the rest below.';
+    else lede='Copy each link and send it over.';
+    var title=!results.length?'No links created':(allEmailed?'Links sent':'Links ready');
     var head=(results.length?'<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>':'')+'<h3>'+title+'</h3><p class="lede">'+lede+'</p>';
     processModal.innerHTML=head+(results.length?list:'')+errHTML+'<button class="modalbtn" id="sendAnother">Done</button>';
     Array.prototype.forEach.call(processModal.querySelectorAll('.cpbtn'),function(btn){

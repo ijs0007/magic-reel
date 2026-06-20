@@ -415,13 +415,28 @@
   // Vertical drags fall through to page scroll (touch-action:pan-y). Capture only once we know
   // it's a horizontal scrub, so we never hijack a scroll.
   (function(){
-    var tz=$('tapzone'), id=null, sx=0, sy=0, st0=0, mode=0; // mode 0=undecided 1=scrub
-    tz.addEventListener('pointerdown',function(e){ if(!controlsActive())return; id=e.pointerId; sx=e.clientX; sy=e.clientY; st0=player.currentTime||0; mode=0; });
-    tz.addEventListener('pointermove',function(e){ if(id===null||e.pointerId!==id)return; var dx=e.clientX-sx, dy=e.clientY-sy;
-      if(mode===0){ if(Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)){ mode=1; pauseT(); try{tz.setPointerCapture(id);}catch(_){}} else return; }
-      e.preventDefault(); var w=tz.getBoundingClientRect().width||1; var nt=st0+(dx/w)*(CTX.duration||0); queueSeek(nt); });
-    function done(e){ if(id===null||(typeof e.pointerId==='number'&&e.pointerId!==id))return; if(mode===1){ try{tz.releasePointerCapture(id);}catch(_){} commitSeek(); } else { togglePlay(); } id=null; mode=0; }
-    tz.addEventListener('pointerup',done); tz.addEventListener('pointercancel',done);
+    // Touch (mobile) + mouse (desktop). Pointer events + late setPointerCapture were unreliable
+    // for finger-scrub on iOS Safari; touch events with a non-passive touchmove are solid.
+    var tz=$('tapzone'), sx=0, sy=0, st0=0, mode=0, active=false, usingTouch=false; // mode 0=undecided 1=scrub 2=scroll
+    function begin(x,y){ if(!controlsActive())return false; sx=x; sy=y; st0=player.currentTime||0; mode=0; active=true; return true; }
+    function move(x,y,ev){
+      if(!active)return;
+      var dx=x-sx, dy=y-sy;
+      if(mode===0){
+        if(Math.abs(dx)>8 && Math.abs(dx)>=Math.abs(dy)){ mode=1; pauseT(); }
+        else if(Math.abs(dy)>8){ mode=2; active=false; return; } // vertical -> let the page scroll
+        else return;
+      }
+      if(mode===1){ if(ev&&ev.cancelable)ev.preventDefault(); var w=tz.getBoundingClientRect().width||1; queueSeek(st0+(dx/w)*(CTX.duration||0)); }
+    }
+    function finish(){ if(!active)return; var wasScrub=(mode===1); active=false; if(wasScrub)commitSeek(); else if(mode===0)togglePlay(); mode=0; }
+    tz.addEventListener('touchstart',function(e){ usingTouch=true; if(e.touches.length>1){active=false;return;} begin(e.touches[0].clientX,e.touches[0].clientY); },{passive:true});
+    tz.addEventListener('touchmove',function(e){ if(active&&e.touches.length)move(e.touches[0].clientX,e.touches[0].clientY,e); },{passive:false});
+    tz.addEventListener('touchend',finish);
+    tz.addEventListener('touchcancel',function(){ active=false; mode=0; });
+    function mm(e){ move(e.clientX,e.clientY,e); }
+    function mu(){ window.removeEventListener('mousemove',mm); window.removeEventListener('mouseup',mu); finish(); }
+    tz.addEventListener('mousedown',function(e){ if(usingTouch||e.button!==0)return; if(begin(e.clientX,e.clientY)){ window.addEventListener('mousemove',mm); window.addEventListener('mouseup',mu); } });
   })();
 
   function pct(t){return CTX.duration>0?(t/CTX.duration*100):0;}
