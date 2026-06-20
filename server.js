@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.17 — 📱 Mobile scrub fix (take 2): touch-action none';
+const APP_VERSION = 'v0.9.19 — ✉️ Simpler email + mobile scrub surface';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -88,90 +88,84 @@ function reqBase(req) {
   return (req.headers.origin && /^https?:\/\//.test(req.headers.origin)) ? req.headers.origin : ('https://' + (req.headers.host || ''));
 }
 
+// Strip a video file extension (.mov/.mp4/etc) from any user-facing film name.
+function stripExt(s) {
+  s = String(s == null ? '' : s).trim();
+  return s.replace(/[.](mov|mp4|m4v|avi|mkv|webm|mpg|mpeg|wmv|flv|mts|m2ts|ts|prores|mxf|r3d|braw|3gp|ogv|vob|qt|dv)$/i, '');
+}
+function reelFirstName(name) {
+  var n = String(name == null ? '' : name).trim();
+  return n.split(' ')[0] || 'there';
+}
+// One elegant, minimal shell for every recipient email: greeting, one line, button, fine print.
+function emailShell(firstEsc, bodyHtml, link) {
+  return '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.65;max-width:460px;margin:0 auto;padding:12px 0;">' +
+    '<p style="font-size:16px;font-weight:600;margin:0 0 16px;">Hi ' + firstEsc + ',</p>' +
+    '<p style="font-size:15px;color:#3a3a3c;margin:0 0 28px;">' + bodyHtml + '</p>' +
+    '<p style="margin:0 0 28px;"><a href="' + link + '" style="background:#7c4dff;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:11px;display:inline-block;">Open your reel</a></p>' +
+    '<p style="color:#a0a0a0;font-size:12.5px;margin:0;">Your private link \u2014 just for you.</p>' +
+    '</div>';
+}
+
 async function sendReelEmail(to, name, link, filmName, budgetSeconds) {
   if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
   to = String(to || '').trim();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return { ok: false, reason: 'no-recipient' };
-  const namedFilm = filmName && filmName !== 'Untitled';
-  const filmPhrase = namedFilm ? '\u201c' + emailEsc(filmName) + '\u201d' : 'a film';
-  const cap = fmtClock(budgetSeconds);
-  const html =
-    '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.6;max-width:520px;margin:0 auto;">' +
-    '<p style="font-size:16px;margin:0 0 14px;">Hi ' + emailEsc(name || 'there') + ',</p>' +
-    '<p style="margin:0 0 14px;">You\u2019ve been sent footage from ' + filmPhrase + ' to build your reel. Open your private link, scrub the preview, mark the moments you want (up to <strong>' + cap + '</strong>), and download a clean, watermark-free cut of your selections.</p>' +
-    '<p style="margin:26px 0;"><a href="' + link + '" style="background:#7c4dff;color:#fff;text-decoration:none;font-weight:600;padding:13px 22px;border-radius:10px;display:inline-block;">Open your reel</a></p>' +
-    '<p style="color:#777;font-size:13px;margin:0 0 4px;">Or paste this into your browser:</p>' +
-    '<p style="color:#7c4dff;word-break:break-all;font-size:13px;margin:0;">' + emailEsc(link) + '</p>' +
-    '<p style="color:#999;font-size:12px;margin-top:26px;">This link is just for you \u2014 please don\u2019t share it.</p>' +
-    '</div>';
+  if (!(to.indexOf('@') > 0 && to.lastIndexOf('.') > to.indexOf('@') + 1)) return { ok: false, reason: 'no-recipient' };
+  var film = stripExt(filmName);
+  var named = film && film !== 'Untitled';
+  var phrase = named ? '\u201c' + emailEsc(film) + '\u201d' : 'your footage';
+  var cap = fmtClock(budgetSeconds);
+  var html = emailShell(emailEsc(reelFirstName(name)), 'Your footage from ' + phrase + ' is ready — pick your selects, up to <strong>' + cap + '</strong>.', link);
   try {
-    const r = await fetch('https://api.resend.com/emails', {
+    var r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Pick your reel selects \u2014 ' + (namedFilm ? filmName : 'your footage'), html })
+      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Your reel selects' + (named ? ' \u2014 ' + film : ''), html })
     });
-    if (!r.ok) { const d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
+    if (!r.ok) { var d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
     return { ok: true };
   } catch (e) { return { ok: false, reason: 'exception', detail: e.message }; }
 }
 
-// A gentler reminder email (same look as the original send, reminder copy). Used by
-// the dashboard "Nudge" action for recipients who haven't finished.
 async function sendReelNudgeEmail(to, name, link, filmName, budgetSeconds) {
   if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
   to = String(to || '').trim();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return { ok: false, reason: 'no-recipient' };
-  const namedFilm = filmName && filmName !== 'Untitled';
-  const filmPhrase = namedFilm ? '\u201c' + emailEsc(filmName) + '\u201d' : 'your footage';
-  const cap = fmtClock(budgetSeconds);
-  const html =
-    '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.6;max-width:520px;margin:0 auto;">' +
-    '<p style="font-size:16px;margin:0 0 14px;">Hi ' + emailEsc(name || 'there') + ',</p>' +
-    '<p style="margin:0 0 14px;">Just a quick nudge \u2014 your reel selects from ' + filmPhrase + ' are still waiting. Open your private link, mark the moments you want (up to <strong>' + cap + '</strong>), and download a clean, watermark-free cut whenever you\u2019re ready.</p>' +
-    '<p style="margin:26px 0;"><a href="' + link + '" style="background:#7c4dff;color:#fff;text-decoration:none;font-weight:600;padding:13px 22px;border-radius:10px;display:inline-block;">Open your reel</a></p>' +
-    '<p style="color:#777;font-size:13px;margin:0 0 4px;">Or paste this into your browser:</p>' +
-    '<p style="color:#7c4dff;word-break:break-all;font-size:13px;margin:0;">' + emailEsc(link) + '</p>' +
-    '<p style="color:#999;font-size:12px;margin-top:26px;">This link is just for you \u2014 please don\u2019t share it.</p>' +
-    '</div>';
+  if (!(to.indexOf('@') > 0 && to.lastIndexOf('.') > to.indexOf('@') + 1)) return { ok: false, reason: 'no-recipient' };
+  var film = stripExt(filmName);
+  var named = film && film !== 'Untitled';
+  var phrase = named ? '\u201c' + emailEsc(film) + '\u201d' : 'your footage';
+  var cap = fmtClock(budgetSeconds);
+  var html = emailShell(emailEsc(reelFirstName(name)), 'Still waiting on your selects from ' + phrase + ' — up to <strong>' + cap + '</strong>, whenever you’re ready.', link);
   try {
-    const r = await fetch('https://api.resend.com/emails', {
+    var r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Reminder: pick your reel selects \u2014 ' + (namedFilm ? filmName : 'your footage'), html })
+      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Reminder: your reel selects' + (named ? ' \u2014 ' + film : ''), html })
     });
-    if (!r.ok) { const d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
+    if (!r.ok) { var d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
     return { ok: true };
   } catch (e) { return { ok: false, reason: 'exception', detail: e.message }; }
 }
 
-// One-time heads-up that a recipient's link is about to expire and they haven't grabbed their
-// selects yet — same look as the send, "last chance" copy.
 async function sendReelExpiringEmail(to, name, link, filmName, budgetSeconds, expiresAt) {
   if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
   to = String(to || '').trim();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return { ok: false, reason: 'no-recipient' };
-  const namedFilm = filmName && filmName !== 'Untitled';
-  const filmPhrase = namedFilm ? '\u201c' + emailEsc(filmName) + '\u201d' : 'your footage';
-  const cap = fmtClock(budgetSeconds);
-  let when = '';
-  try { const d = new Date(expiresAt); if (!isNaN(d.getTime())) when = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: DISPLAY_TZ }); } catch (e) {}
-  const expiryPhrase = when ? ('on ' + when) : 'soon';
-  const html =
-    '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.6;max-width:520px;margin:0 auto;">' +
-    '<p style="font-size:16px;margin:0 0 14px;">Hi ' + emailEsc(name || 'there') + ',</p>' +
-    '<p style="margin:0 0 14px;">A heads-up \u2014 your private link to pull selects from ' + filmPhrase + ' expires <strong>' + expiryPhrase + '</strong>. If you still want a clean, watermark-free cut of your moments (up to <strong>' + cap + '</strong>), open your link and download before then. After that the footage comes down.</p>' +
-    '<p style="margin:26px 0;"><a href="' + link + '" style="background:#7c4dff;color:#fff;text-decoration:none;font-weight:600;padding:13px 22px;border-radius:10px;display:inline-block;">Open your reel</a></p>' +
-    '<p style="color:#777;font-size:13px;margin:0 0 4px;">Or paste this into your browser:</p>' +
-    '<p style="color:#7c4dff;word-break:break-all;font-size:13px;margin:0;">' + emailEsc(link) + '</p>' +
-    '<p style="color:#999;font-size:12px;margin-top:26px;">This link is just for you \u2014 please don\u2019t share it.</p>' +
-    '</div>';
+  if (!(to.indexOf('@') > 0 && to.lastIndexOf('.') > to.indexOf('@') + 1)) return { ok: false, reason: 'no-recipient' };
+  var film = stripExt(filmName);
+  var named = film && film !== 'Untitled';
+  var phrase = named ? '\u201c' + emailEsc(film) + '\u201d' : 'your footage';
+  var cap = fmtClock(budgetSeconds);
+  var when = '';
+  try { var d0 = new Date(expiresAt); if (!isNaN(d0.getTime())) when = d0.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: DISPLAY_TZ }); } catch (e) {}
+  var expiry = when ? ('on ' + when) : 'soon';
+  var html = emailShell(emailEsc(reelFirstName(name)), 'Your link for ' + phrase + ' expires <strong>' + expiry + '</strong> — grab your cut (up to <strong>' + cap + '</strong>) before then.', link);
   try {
-    const r = await fetch('https://api.resend.com/emails', {
+    var r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Your reel link expires soon \u2014 ' + (namedFilm ? filmName : 'your footage'), html })
+      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Your reel link is expiring' + (named ? ' \u2014 ' + film : ''), html })
     });
-    if (!r.ok) { const d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
+    if (!r.ok) { var d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
     return { ok: true };
   } catch (e) { return { ok: false, reason: 'exception', detail: e.message }; }
 }
@@ -324,7 +318,7 @@ function publicSend(r) {
 
 app.use(express.json());
 app.use(gate);
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: function(res, fp){ if(String(fp).toLowerCase().endsWith('.html')) res.set('Cache-Control','no-store, max-age=0'); } }));
 
 // --- auth (exempt from the gate) ---
 app.get('/login', (req, res) => {
@@ -349,10 +343,10 @@ app.get('/logout', (req, res) => {
 //  /dashboard   -> the activity dashboard
 //  /r/:token    -> a recipient's private preview link
 app.get('/dashboard', (req, res) =>
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'), { headers: { 'Cache-Control': 'no-store, max-age=0' } }));
 
 app.get('/r/:token?', (req, res) =>
-  res.sendFile(path.join(__dirname, 'public', 'reel.html')));
+  res.sendFile(path.join(__dirname, 'public', 'reel.html'), { headers: { 'Cache-Control': 'no-store, max-age=0' } }));
 
 // --- health check: confirms the service is up and the database is reachable ---
 app.get('/health', async (req, res) => {
@@ -448,7 +442,7 @@ app.post('/api/uploads', async (req, res) => {
     // Make room before adding another asset: free anything expired, then enforce the floor.
     await cleanupExpiredSends().catch(function () {});
     await enforceAssetFloor().catch(function () {});
-    const filmName = (req.body && req.body.filmName) || 'Untitled';
+    const filmName = stripExt((req.body && req.body.filmName) || 'Untitled');
     const signed = signingConfigured();
     const upload = await muxFetch('/video/v1/uploads', {
       method: 'POST',

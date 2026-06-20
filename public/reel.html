@@ -45,7 +45,7 @@
 
   .stage{position:relative;background:#000;aspect-ratio:16/9;width:100%;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-user-drag:none}
   .stage canvas{display:block;width:100%;height:100%}
-  .stage mux-video{display:block;width:100%;height:100%;background:#000;--media-object-fit:contain}
+  .stage mux-video{display:block;width:100%;height:100%;background:#000;--media-object-fit:contain;pointer-events:none}
   .stagemsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:#000;z-index:3}
   .stagemsg .sm-in{max-width:300px;line-height:1.5;color:#cfcfcf;font-size:13.5px}
   .stagemsg .spin2{width:18px;height:18px;border:2px solid rgba(255,255,255,.4);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 11px}
@@ -146,7 +146,7 @@
   .olapnote{color:var(--err);font-weight:600}
 
   /* v0.8.8 compact recipient layout */
-  .tapzone{position:absolute;inset:0;z-index:2;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
+  .tapzone{position:absolute;inset:0;z-index:2;cursor:pointer;touch-action:none;background:rgba(0,0,0,0.01);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
   .wm{z-index:1}
   .lowres{z-index:5}
   .pbig{z-index:4;pointer-events:none}
@@ -323,7 +323,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.17 &mdash; &#128241; Mobile scrub fix</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.19 &mdash; &#9993;&#65039; Simpler email + scrub surface</footer>
 </div>
 
 <div class="bar">
