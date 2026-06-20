@@ -323,7 +323,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.9 &mdash; &#128202; Live transcode progress &amp; clearer offline status</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.10 &mdash; &#128257; Stall recovery: catches a frozen upload and restarts it</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -417,12 +417,28 @@
       v.addEventListener('error',function(){try{URL.revokeObjectURL(url);}catch(e){}});
     }catch(e){}
     refresh();
+    state.autoRetries=0;
     startUpload(file);
   }
 
   // --- Milestone 2: real upload to Mux + transcode status ---
   var upStatus=$('upStatus'), upPreview=$('upPreview');
   function renderUp(html, cls){ upStatus.className='up-status'+(cls?' '+cls:''); upStatus.innerHTML=html; upStatus.classList.remove('hidden'); }
+  function clearStallWatch(){ if(state.stallTimer){ clearInterval(state.stallTimer); state.stallTimer=null; } }
+  function startStallWatch(file){
+    clearStallWatch();
+    state.lastProgressAt=Date.now();
+    state.stallTimer=setInterval(function(){
+      if(!state.uploadXhr){ clearStallWatch(); return; }
+      if(!navigator.onLine){ state.lastProgressAt=Date.now(); return; }
+      if(Date.now()-state.lastProgressAt > 40000){
+        clearStallWatch();
+        try{ state.uploadXhr.abort(); }catch(e){} state.uploadXhr=null;
+        if((state.autoRetries||0) < 1){ state.autoRetries=(state.autoRetries||0)+1; renderUp('Connection stalled \u2014 restarting upload\u2026'); startUpload(file); }
+        else { renderUp('Upload stalled \u2014 your connection isn\u2019t responding. Remove the file and try again.','err'); }
+      }
+    },5000);
+  }
   function startUpload(file){
     state.sendId=null; state.playbackId=null;
     upPreview.classList.add('hidden'); upPreview.innerHTML='';
@@ -436,14 +452,15 @@
         if(typeof UpChunk==='undefined'||!UpChunk.createUpload){ renderUp('Uploader didn\u2019t load \u2014 please refresh and try again.','err'); return; }
         function bar(p){ return '<span class="barwrap"><span class="bf" style="width:'+p+'%"></span></span>'; }
         var lastPct=0;
-        var up=UpChunk.createUpload({ endpoint:res.j.uploadUrl, file:file, chunkSize:8192, attempts:8, delayBeforeAttempt:2 });
+        var up=UpChunk.createUpload({ endpoint:res.j.uploadUrl, file:file, chunkSize:5120, attempts:8, delayBeforeAttempt:2 });
         state.uploadXhr=up;
-        up.on('progress',function(e){ var d=e.detail; var p=Math.max(0,Math.min(100,Math.round((typeof d==='number'?d:(d&&d.progress))||0))); lastPct=p; renderUp('Uploading <b>'+p+'%</b>'+bar(p)); });
+        startStallWatch(file);
+        up.on('progress',function(e){ state.lastProgressAt=Date.now(); var d=e.detail; var p=Math.max(0,Math.min(100,Math.round((typeof d==='number'?d:(d&&d.progress))||0))); lastPct=p; renderUp('Uploading <b>'+p+'%</b>'+bar(p)); });
         up.on('attemptFailure',function(){ renderUp('Connection hiccup \u2014 retrying\u2026 <b>'+lastPct+'%</b>'+bar(lastPct)); });
         up.on('offline',function(){ renderUp('Connection lost \u2014 will resume when you\u2019re back online <b>'+lastPct+'%</b>'+bar(lastPct)); });
         up.on('online',function(){ renderUp('Reconnected \u2014 resuming\u2026 <b>'+lastPct+'%</b>'+bar(lastPct)); });
-        up.on('success',function(){ renderUp('Uploaded \u00b7 transcoding'+bar(100)); pollStatus(state.sendId); });
-        up.on('error',function(e){ var msg=(e.detail&&e.detail.message)||''; if(!navigator.onLine||/responded with 0/i.test(msg)||/network/i.test(msg)){ renderUp('Connection lost \u2014 will resume when you\u2019re back online <b>'+lastPct+'%</b>'+bar(lastPct)); } else { renderUp('Upload failed \u2014 '+(msg||'please remove the file and try again')+'.','err'); } });
+        up.on('success',function(){ clearStallWatch(); renderUp('Uploaded \u00b7 transcoding'+bar(100)); pollStatus(state.sendId); });
+        up.on('error',function(e){ var msg=(e.detail&&e.detail.message)||''; if(!navigator.onLine||/responded with 0/i.test(msg)||/network/i.test(msg)){ renderUp('Connection lost \u2014 will resume when you\u2019re back online <b>'+lastPct+'%</b>'+bar(lastPct)); } else { clearStallWatch(); state.uploadXhr=null; renderUp('Upload failed \u2014 '+(msg||'please remove the file and try again')+'.','err'); } });
       })
       .catch(function(){ renderUp('Couldn\u2019t reach the server.','err'); });
   }
@@ -469,6 +486,7 @@
   }
   function clearFile(){
     if(state.uploadXhr){try{state.uploadXhr.abort();}catch(e){}state.uploadXhr=null;}
+    clearStallWatch(); state.autoRetries=0;
     clearTimeout(state.pollTimer); state.sendId=null; state.playbackId=null;
     upStatus.classList.add('hidden'); upStatus.innerHTML=''; upPreview.classList.add('hidden'); upPreview.innerHTML='';
     state.file=null;filecard.classList.remove('show');drop.style.display='';filein.value='';refresh();
