@@ -146,7 +146,7 @@
   .olapnote{color:var(--err);font-weight:600}
 
   /* v0.8.8 compact recipient layout */
-  .tapzone{position:absolute;inset:0;z-index:2;cursor:pointer;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+  .tapzone{position:absolute;inset:0;z-index:2;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
   .wm{z-index:1}
   .lowres{z-index:5}
   .pbig{z-index:4;pointer-events:none}
@@ -323,7 +323,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.13 &mdash; &#127991;&#65039; Accurate download quality label</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.17 &mdash; &#128241; Mobile scrub fix</footer>
 </div>
 
 <div class="bar">
@@ -422,12 +422,8 @@
     function move(x,y,ev){
       if(!active)return;
       var dx=x-sx, dy=y-sy;
-      if(mode===0){
-        if(Math.abs(dx)>8 && Math.abs(dx)>=Math.abs(dy)){ mode=1; pauseT(); }
-        else if(Math.abs(dy)>8){ mode=2; active=false; return; } // vertical -> let the page scroll
-        else return;
-      }
-      if(mode===1){ if(ev&&ev.cancelable)ev.preventDefault(); var w=tz.getBoundingClientRect().width||1; queueSeek(st0+(dx/w)*(CTX.duration||0)); }
+      if(mode===0){ if(Math.abs(dx)>6||Math.abs(dy)>6){ mode=1; pauseT(); } else return; } // any drag = scrub
+      if(ev&&ev.cancelable)ev.preventDefault(); var w=tz.getBoundingClientRect().width||1; queueSeek(st0+(dx/w)*(CTX.duration||0));
     }
     function finish(){ if(!active)return; var wasScrub=(mode===1); active=false; if(wasScrub)commitSeek(); else if(mode===0)togglePlay(); mode=0; }
     tz.addEventListener('touchstart',function(e){ usingTouch=true; if(e.touches.length>1){active=false;return;} begin(e.touches[0].clientX,e.touches[0].clientY); },{passive:true});
