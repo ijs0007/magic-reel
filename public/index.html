@@ -320,7 +320,8 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.8.9 &mdash; &#128101; Send page: collapsible recipient picker, clearer recipients zone</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.7 &mdash; &#128290; One number everywhere: every page shows the live backend version</footer>
+  <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
 <div class="bar">

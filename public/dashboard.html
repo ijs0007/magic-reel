@@ -170,7 +170,8 @@
 
   <div id="detailView" class="hidden"></div>
 
-  <footer class="ver">Magic Reel &middot; v0.9.2 &mdash; &#128241; Dashboard mobile: long titles &amp; emails wrap</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.7 &mdash; &#128290; One number everywhere: every page shows the live backend version</footer>
+  <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
 <div class="scrim" id="sheetScrim"><div class="sheet" id="recSheet"></div></div>
