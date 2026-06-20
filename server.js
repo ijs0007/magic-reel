@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.4 — 🧹 Auto-cleanup: shorten a send to 24h once everyone has downloaded';
+const APP_VERSION = 'v0.9.5 — ✉️ Expiring-soon email: one-time heads-up before a link lapses';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,6 +72,11 @@ async function muxFetch(p, opts) {
 //     Silently no-ops if not configured, exactly like MSM. ---
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const CALLSHEET_FROM = process.env.CALLSHEET_FROM || ''; // e.g. "Isaiah Smith <you@isaiahsmithfilms.com>"
+// Public base URL (e.g. https://reels.isaiahsmithfilms.com) for links built in background jobs,
+// where there's no request to read the host from. Only needed for the "expiring soon" email;
+// if unset, that email stays dormant.
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/[/]+$/, '');
+const DISPLAY_TZ = process.env.DISPLAY_TZ || 'America/Los_Angeles'; // Pacific — timezone for dates shown in recipient emails
 function resendConfigured() { return !!(RESEND_API_KEY && CALLSHEET_FROM); }
 function fmtClock(s) { s = Math.max(0, Math.round(Number(s) || 0)); const m = Math.floor(s / 60), ss = s % 60; return m + ':' + (ss < 10 ? '0' : '') + ss; }
 function emailEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -133,6 +138,38 @@ async function sendReelNudgeEmail(to, name, link, filmName, budgetSeconds) {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Reminder: pick your reel selects \u2014 ' + (namedFilm ? filmName : 'your footage'), html })
+    });
+    if (!r.ok) { const d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
+    return { ok: true };
+  } catch (e) { return { ok: false, reason: 'exception', detail: e.message }; }
+}
+
+// One-time heads-up that a recipient's link is about to expire and they haven't grabbed their
+// selects yet — same look as the send, "last chance" copy.
+async function sendReelExpiringEmail(to, name, link, filmName, budgetSeconds, expiresAt) {
+  if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
+  to = String(to || '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return { ok: false, reason: 'no-recipient' };
+  const namedFilm = filmName && filmName !== 'Untitled';
+  const filmPhrase = namedFilm ? '\u201c' + emailEsc(filmName) + '\u201d' : 'your footage';
+  const cap = fmtClock(budgetSeconds);
+  let when = '';
+  try { const d = new Date(expiresAt); if (!isNaN(d.getTime())) when = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: DISPLAY_TZ }); } catch (e) {}
+  const expiryPhrase = when ? ('on ' + when) : 'soon';
+  const html =
+    '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.6;max-width:520px;margin:0 auto;">' +
+    '<p style="font-size:16px;margin:0 0 14px;">Hi ' + emailEsc(name || 'there') + ',</p>' +
+    '<p style="margin:0 0 14px;">A heads-up \u2014 your private link to pull selects from ' + filmPhrase + ' expires <strong>' + expiryPhrase + '</strong>. If you still want a clean, watermark-free cut of your moments (up to <strong>' + cap + '</strong>), open your link and download before then. After that the footage comes down.</p>' +
+    '<p style="margin:26px 0;"><a href="' + link + '" style="background:#7c4dff;color:#fff;text-decoration:none;font-weight:600;padding:13px 22px;border-radius:10px;display:inline-block;">Open your reel</a></p>' +
+    '<p style="color:#777;font-size:13px;margin:0 0 4px;">Or paste this into your browser:</p>' +
+    '<p style="color:#7c4dff;word-break:break-all;font-size:13px;margin:0;">' + emailEsc(link) + '</p>' +
+    '<p style="color:#999;font-size:12px;margin-top:26px;">This link is just for you \u2014 please don\u2019t share it.</p>' +
+    '</div>';
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Your reel link expires soon \u2014 ' + (namedFilm ? filmName : 'your footage'), html })
     });
     if (!r.ok) { const d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
     return { ok: true };
@@ -276,6 +313,7 @@ async function ensureSchema() {
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS used_seconds DOUBLE PRECISION NOT NULL DEFAULT 0');
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS opened_at TIMESTAMPTZ');
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS last_cut_at TIMESTAMPTZ');
+  await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS expiring_notified_at TIMESTAMPTZ');
 }
 function publicSend(r) {
   return Object.assign(
@@ -510,6 +548,7 @@ const MIN_CLIP_SECONDS = 0.5;   // Mux requires clips of at least 500 ms
 const MAX_ASSETS = 8;           // hard floor: never hold more than this many live master assets (Mux free tier caps at 10; leaves headroom for transient clip-assets)
 const LINK_TTL_DAYS = 14;       // a recipient link (and its master asset) lives this long, then is cleaned up
 const FULLY_DOWNLOADED_GRACE_HOURS = 24; // once EVERY recipient has pulled a cut, shorten the link's life to this so footage doesn't linger the full TTL
+const EXPIRING_SOON_HOURS = 48;          // one-time heads-up email to recipients who haven't downloaded when their link is within this window of expiry
 const POLL_MS = 2500;
 const CLIP_TIMEOUT_MS = 6 * 60 * 1000;
 const STITCH_TIMEOUT_MS = 3 * 60 * 1000;
@@ -1070,10 +1109,34 @@ async function accelerateFullyDownloaded() {
     " AND NOT EXISTS (SELECT 1 FROM reel_recipients r WHERE r.send_id = s.id AND r.used_seconds <= 0.05)");
 }
 
+// One-time "your link expires soon" email to recipients who still haven't grabbed anything.
+// Guards: send must be live; recipient must have an email, NOT have downloaded (used_seconds
+// <= 0.05), the link must be inside the warning window but not already expired, and they must
+// not have been emailed before. Only marks notified on a successful send (so failures retry).
+// Dormant unless both Resend and PUBLIC_BASE_URL are configured.
+async function notifyExpiringSoon() {
+  if (!pool || !resendConfigured() || !PUBLIC_BASE_URL) return;
+  const q = await pool.query(
+    "SELECT rec.token, rec.name, rec.email, rec.budget_seconds, s.film_name, s.expires_at" +
+    " FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id" +
+    " WHERE s.asset_id IS NOT NULL AND s.asset_deleted_at IS NULL" +
+    " AND s.expires_at IS NOT NULL AND s.expires_at > now() AND s.expires_at < now() + interval '" + EXPIRING_SOON_HOURS + " hours'" +
+    " AND rec.email IS NOT NULL AND rec.email <> ''" +
+    " AND rec.used_seconds <= 0.05" +
+    " AND rec.expiring_notified_at IS NULL");
+  for (const r of q.rows) {
+    const out = await sendReelExpiringEmail(r.email, r.name, PUBLIC_BASE_URL + '/r/' + r.token, r.film_name, r.budget_seconds, r.expires_at);
+    if (out && out.ok) {
+      await pool.query('UPDATE reel_recipients SET expiring_notified_at = now() WHERE token = $1', [r.token]).catch(function () {});
+    }
+  }
+}
+
 function runRetention() {
   accelerateFullyDownloaded().catch(function (e) { console.warn('[reel-retention] accelerate:', e.message); });
   cleanupExpiredSends().catch(function (e) { console.warn('[reel-retention] cleanup:', e.message); });
   enforceAssetFloor().catch(function (e) { console.warn('[reel-retention] floor:', e.message); });
+  notifyExpiringSoon().catch(function (e) { console.warn('[reel-retention] expiring:', e.message); });
 }
 
 if (require.main === module) {
