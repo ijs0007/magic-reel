@@ -49,6 +49,11 @@
   .drop h2{font-size:15px;font-weight:500;margin:0 0 3px;color:var(--text)}
   .drop p{font-size:12.5px;color:var(--text-soft);margin:0}
   .drop .browse{color:var(--accent);font-weight:500}
+  .drop.locked{opacity:.5;cursor:not-allowed}
+  .drop.locked:hover{border-color:var(--border);background:var(--bg)}
+  .drop.locked .browse{color:var(--text-soft)}
+  @keyframes cardflash{0%{box-shadow:0 0 0 0 rgba(124,77,255,0)}25%{box-shadow:0 0 0 3px rgba(124,77,255,.4)}100%{box-shadow:0 0 0 0 rgba(124,77,255,0)}}
+  .card.flash{animation:cardflash 1.1s ease}
 
   .filecard{display:none;align-items:center;gap:14px;padding:13px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
   .filecard.show{display:flex}
@@ -243,28 +248,10 @@
   </header>
 
   <h1 class="title">Send selects</h1>
-  <p class="sub">Drop your film, choose who&rsquo;s getting reels, and they build their own.</p>
+  <p class="sub">Pick who gets reels and set the length, then drop your film &mdash; it uploads and sends on its own.</p>
 
   <!-- STEP 1 -->
-  <div class="card">
-    <p class="eyebrow">Your film</p>
-    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Add a video file">
-      <div class="drop-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v13M7 8l5-5 5 5"/></svg></div>
-      <h2>Drop your film here</h2>
-      <p>or <span class="browse">browse to choose</span> &mdash; any video file</p>
-    </div>
-    <input type="file" id="filein" accept="video/*" class="hidden">
-    <div class="filecard" id="filecard">
-      <div class="thumb" id="thumb"><span class="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="5 3 19 12 5 21 5 3"/></svg></span></div>
-      <div class="fileinfo"><div class="name" id="fname">&mdash;</div><div class="meta" id="fmeta">&mdash;</div></div>
-      <button class="xbtn" id="fremove" aria-label="Remove file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-    </div>
-    <div id="upStatus" class="up-status hidden"></div>
-    <div id="upPreview" class="up-preview hidden"></div>
-  </div>
-
-  <!-- STEP 2 -->
-  <div class="card">
+  <div class="card" id="whoCard">
     <p class="eyebrow">Who gets it</p>
 
     <div class="deflen">
@@ -323,18 +310,26 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.10 &mdash; &#128257; Stall recovery: catches a frozen upload and restarts it</footer>
-  <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
-</div>
-
-<div class="bar">
-  <div class="bar-in">
-    <div class="count">
-      <div class="big" id="countBig">No one selected yet</div>
-      <div class="sub2" id="countSub">Add a film and choose your people</div>
+  <!-- STEP 2 -->
+  <div class="card">
+    <p class="eyebrow">Your film</p>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Add a video file">
+      <div class="drop-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v13M7 8l5-5 5 5"/></svg></div>
+      <h2 id="dropH">Drop film to send reel</h2>
+      <p id="dropP">or <span class="browse">browse</span> &mdash; uploads &amp; sends automatically</p>
     </div>
-    <button class="send" id="sendbtn" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>Send Reel</button>
+    <input type="file" id="filein" accept="video/*" class="hidden">
+    <div class="filecard" id="filecard">
+      <div class="thumb" id="thumb"><span class="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="5 3 19 12 5 21 5 3"/></svg></span></div>
+      <div class="fileinfo"><div class="name" id="fname">&mdash;</div><div class="meta" id="fmeta">&mdash;</div></div>
+      <button class="xbtn" id="fremove" aria-label="Remove file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div id="upStatus" class="up-status hidden"></div>
+    <div id="upPreview" class="up-preview hidden"></div>
   </div>
+
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.15 &mdash; &#127919; Drop-to-send</footer>
+  <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
 <div class="scrim" id="processScrim"><div class="modal" id="processModal"></div></div>
@@ -367,7 +362,7 @@
 
   /* ---- recipients model ---- */
   var CAP_OPTS=[30,60,90,120,150,180,240,300];
-  var state={src:'custom',projectId:'',recipients:[],file:null,globalCap:120};
+  var state={src:'custom',projectId:'',recipients:[],file:null,globalCap:120,sent:false};
   var customSeq=0;
   function effCap(rec){return rec.override!=null?rec.override:state.globalCap;}
   function findByPid(pid){for(var i=0;i<state.recipients.length;i++){var r=state.recipients[i];if(r.kind==='person'&&r.pid===pid)return r;}return null;}
@@ -405,6 +400,8 @@
   var drop=$('drop'),filein=$('filein'),filecard=$('filecard'),thumb=$('thumb'),fname=$('fname'),fmeta=$('fmeta');
   function handleFile(file){
     if(!file)return;
+    if(state.recipients.length===0){ nudgeRecipients(); return; }
+    state.sent=false;
     state.file={name:file.name,size:file.size,duration:0};
     fname.textContent=file.name; fmeta.textContent=fmtSize(file.size);
     thumb.innerHTML='<span class="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>';
@@ -459,7 +456,7 @@
         up.on('attemptFailure',function(){ renderUp('Connection hiccup \u2014 retrying\u2026 <b>'+lastPct+'%</b>'+bar(lastPct)); });
         up.on('offline',function(){ renderUp('Connection lost \u2014 will resume when you\u2019re back online <b>'+lastPct+'%</b>'+bar(lastPct)); });
         up.on('online',function(){ renderUp('Reconnected \u2014 resuming\u2026 <b>'+lastPct+'%</b>'+bar(lastPct)); });
-        up.on('success',function(){ clearStallWatch(); renderUp('Uploaded \u00b7 transcoding'+bar(100)); pollStatus(state.sendId); });
+        up.on('success',function(){ clearStallWatch(); renderUp('Upload complete · transcoding'+bar(100)); pollStatus(state.sendId); });
         up.on('error',function(e){ var msg=(e.detail&&e.detail.message)||''; if(!navigator.onLine||/responded with 0/i.test(msg)||/network/i.test(msg)){ renderUp('Connection lost \u2014 will resume when you\u2019re back online <b>'+lastPct+'%</b>'+bar(lastPct)); } else { clearStallWatch(); state.uploadXhr=null; renderUp('Upload failed \u2014 '+(msg||'please remove the file and try again')+'.','err'); } });
       })
       .catch(function(){ renderUp('Couldn\u2019t reach the server.','err'); });
@@ -468,7 +465,7 @@
     clearTimeout(state.pollTimer);
     fetch('/api/sends/'+sendId+'/status').then(function(r){return r.json();}).then(function(j){
       if(sendId!==state.sendId) return; // a newer file replaced this one
-      if(j.status==='ready'){ state.playbackId=j.playbackId; renderUp('Transcoded and ready','ready'); showPreview(j); }
+      if(j.status==='ready'){ state.playbackId=j.playbackId; renderUp('Ready &mdash; sending links','ready'); finalizeSend(); }
       else if(j.status==='error'){ renderUp('Mux couldn\u2019t process this file.','err'); }
       else {
         var pr=(typeof j.progress==='number')?j.progress:-1;
@@ -486,13 +483,13 @@
   }
   function clearFile(){
     if(state.uploadXhr){try{state.uploadXhr.abort();}catch(e){}state.uploadXhr=null;}
-    clearStallWatch(); state.autoRetries=0;
+    clearStallWatch(); state.autoRetries=0; state.sent=false;
     clearTimeout(state.pollTimer); state.sendId=null; state.playbackId=null;
     upStatus.classList.add('hidden'); upStatus.innerHTML=''; upPreview.classList.add('hidden'); upPreview.innerHTML='';
     state.file=null;filecard.classList.remove('show');drop.style.display='';filein.value='';refresh();
   }
-  drop.addEventListener('click',function(){filein.click();});
-  drop.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();filein.click();}});
+  drop.addEventListener('click',function(){ if(state.recipients.length===0){nudgeRecipients();return;} filein.click(); });
+  drop.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault(); if(state.recipients.length===0){nudgeRecipients();return;} filein.click();}});
   filein.addEventListener('change',function(e){if(e.target.files&&e.target.files[0])handleFile(e.target.files[0]);});
   $('fremove').addEventListener('click',clearFile);
   ['dragenter','dragover'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.add('drag');});});
@@ -638,13 +635,17 @@
   $('clearAll').addEventListener('click',function(){var pids=state.recipients.filter(function(r){return r.kind==='person';}).map(function(r){return r.pid;});state.recipients=[];pids.forEach(syncPick);renderRecipientList();refresh();});
 
   function refresh(){
-    var n=state.recipients.length,hasFile=!!state.file;
-    $('countBig').textContent=n===0?'No one selected yet':(n+' '+(n===1?'person':'people')+' selected');
-    if(!hasFile&&n===0)$('countSub').textContent='Add a film and choose your people';
-    else if(!hasFile)$('countSub').textContent='Add your film to send';
-    else if(n===0)$('countSub').textContent='Add who gets the reel';
-    else $('countSub').textContent='Ready to send';
-    $('sendbtn').disabled=!(hasFile&&n>0);
+    var n=state.recipients.length;
+    var locked=(n===0);
+    if(drop)drop.classList.toggle('locked',locked);
+    var dh=$('dropH'),dp=$('dropP');
+    if(dh)dh.textContent=locked?'Add recipients first':'Drop film to send reel';
+    if(dp)dp.innerHTML=locked?'Choose who gets the reel above ↑':'or <span class="browse">browse</span> — uploads &amp; sends automatically';
+  }
+  function nudgeRecipients(){
+    var c=$('whoCard'); if(!c) return;
+    c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash');
+    try{ c.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){}
   }
 
   /* ---- profile + override ---- */
@@ -726,9 +727,9 @@
     if(custName)custName.value='';if(custEmail)custEmail.value='';
     renderRecipientList();refresh();
   }
-  $('sendbtn').addEventListener('click',function(){
-    if(!state.file||state.recipients.length===0)return;
-    if(!state.sendId){ processScrim.classList.add('show'); processModal.innerHTML='<h3>Almost there</h3><p class="lede">Your film is still preparing its upload \u2014 give it a moment, then tap Send again.</p><button class="modalbtn" id="sendAnother">OK</button>'; $('sendAnother').addEventListener('click',function(){processScrim.classList.remove('show');}); return; }
+  function finalizeSend(){
+    if(!state.sendId||state.recipients.length===0) return;
+    if(state.sent) return; state.sent=true;
     var recs=state.recipients.slice(), sendId=state.sendId, results=[], errors=[];
     processScrim.classList.add('show'); renderMinting();
     var chain=Promise.resolve();
@@ -739,7 +740,7 @@
         .catch(function(){ errors.push({name:rec.name}); });
     });});
     chain.then(function(){ renderResults(results,errors); });
-  });
+  }
 
   renderProjPick();renderRecipientList();refresh();
 })();
