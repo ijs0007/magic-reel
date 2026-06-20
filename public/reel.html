@@ -323,7 +323,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.9.3 &mdash; &#127902;&#65039; Real source fps: accurate frame-step</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.6 &mdash; &#128290; One number: page shows the live backend version</footer>
 </div>
 
 <div class="bar">
@@ -510,6 +510,7 @@
     }).catch(function(){ loadPoll=setTimeout(loadByToken,4000); });
   }
   showMsg('Loading your footage\u2026',true);
+  fetch('/version').then(function(r){return r.json();}).then(function(j){ if(j&&j.version&&$('ver')) $('ver').textContent='Magic Reel \u00b7 '+j.version; }).catch(function(){});
   if(TOKEN){ loadByToken(); }
   else {
     fetch('/api/sends/latest').then(function(r){
