@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.11 — 🎬 Thumbnail scrub previews on the recipient page';
+const APP_VERSION = 'v0.9.12 — ✂️ Removed scrub thumbnails';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

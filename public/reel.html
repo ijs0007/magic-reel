@@ -63,10 +63,7 @@
   .tcode{font-size:13px;font-weight:500;color:var(--text-soft);font-variant-numeric:tabular-nums}
   .tcode b{color:var(--text);font-weight:600}
 
-  .tlwrap{padding:12px 16px 4px;position:relative}
-  .sbprev{position:absolute;bottom:44px;left:0;transform:translateX(-50%);display:none;z-index:12;pointer-events:none;background:#000;border:1px solid var(--border);border-radius:8px;padding:3px;box-shadow:0 6px 22px rgba(0,0,0,.45)}
-  .sbthumb{width:150px;height:84px;background-color:#111;background-repeat:no-repeat;border-radius:5px}
-  .sbtime{text-align:center;font-size:10.5px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums;margin-top:2px;letter-spacing:.02em}
+  .tlwrap{padding:12px 16px 4px}
   .tl{position:relative;height:32px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
   .tl .ticks{position:absolute;inset:0;pointer-events:none;background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),rgba(0,0,0,.05) calc(10% - 1px),rgba(0,0,0,.05) 10%)}
   body.dark .tl .ticks{background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),rgba(255,255,255,.06) calc(10% - 1px),rgba(255,255,255,.06) 10%)}
@@ -281,7 +278,6 @@
         <div class="fitblock" id="fitBlock" style="display:none"><span class="grip"></span></div>
         <div class="playhead" id="ph" style="left:0"></div>
       </div>
-      <div class="sbprev" id="sbprev"><div class="sbthumb" id="sbthumb"></div><div class="sbtime" id="sbtime">0:00</div></div>
     </div>
     <div class="deck locked" id="deck">
       <div class="deckhead">
@@ -327,7 +323,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.11 &mdash; &#127916; Thumbnail scrub previews</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.12 &mdash; &#9986;&#65039; Removed scrub thumbnails</footer>
 </div>
 
 <div class="bar">
@@ -423,8 +419,8 @@
     tz.addEventListener('pointerdown',function(e){ if(!controlsActive())return; id=e.pointerId; sx=e.clientX; sy=e.clientY; st0=player.currentTime||0; mode=0; });
     tz.addEventListener('pointermove',function(e){ if(id===null||e.pointerId!==id)return; var dx=e.clientX-sx, dy=e.clientY-sy;
       if(mode===0){ if(Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)){ mode=1; pauseT(); try{tz.setPointerCapture(id);}catch(_){}} else return; }
-      e.preventDefault(); var w=tz.getBoundingClientRect().width||1; var nt=st0+(dx/w)*(CTX.duration||0); queueSeek(nt); showSb(nt); });
-    function done(e){ if(id===null||(typeof e.pointerId==='number'&&e.pointerId!==id))return; if(mode===1){ try{tz.releasePointerCapture(id);}catch(_){} commitSeek(); hideSb(); } else { togglePlay(); } id=null; mode=0; }
+      e.preventDefault(); var w=tz.getBoundingClientRect().width||1; var nt=st0+(dx/w)*(CTX.duration||0); queueSeek(nt); });
+    function done(e){ if(id===null||(typeof e.pointerId==='number'&&e.pointerId!==id))return; if(mode===1){ try{tz.releasePointerCapture(id);}catch(_){} commitSeek(); } else { togglePlay(); } id=null; mode=0; }
     tz.addEventListener('pointerup',done); tz.addEventListener('pointercancel',done);
   })();
 
@@ -440,52 +436,11 @@
   function commitSeek(){ if(_seekRAF){cancelAnimationFrame(_seekRAF);_seekRAF=null;} if(_seekTo!=null){var t=_seekTo;_seekTo=null;try{player.currentTime=t;}catch(_){}} _seeking=false; render(); }
 
   var tl=$('tl'),scrubbing=false;
-  function seekFromX(cx){if(!(CTX.duration>0))return;var r=tl.getBoundingClientRect();var p=Math.min(1,Math.max(0,(cx-r.left)/r.width));queueSeek(p*CTX.duration);showSb(p*CTX.duration);}
+  function seekFromX(cx){if(!(CTX.duration>0))return;var r=tl.getBoundingClientRect();var p=Math.min(1,Math.max(0,(cx-r.left)/r.width));queueSeek(p*CTX.duration);}
   tl.addEventListener('pointerdown',function(e){e.preventDefault();pauseT();scrubbing=true;try{tl.setPointerCapture(e.pointerId);}catch(_){}seekFromX(e.clientX);});
   tl.addEventListener('pointermove',function(e){if(scrubbing){e.preventDefault();seekFromX(e.clientX);}});
-  tl.addEventListener('pointerup',function(){scrubbing=false;commitSeek();hideSb();});
-  tl.addEventListener('pointercancel',function(){scrubbing=false;commitSeek();hideSb();});
-
-  // --- Storyboard thumbnail scrub preview (Mux sprite + tile map; complements frame-step) ---
-  var sbprev=$('sbprev'),sbthumb=$('sbthumb'),sbtime=$('sbtime'),THUMB_W=150;
-  function loadSb(){
-    if(CTX.sb||!CTX.playbackId||CTX.sbLoading)return;
-    if(CTX.sbNextTry&&Date.now()<CTX.sbNextTry)return;
-    CTX.sbLoading=true;
-    var u='https://image.mux.com/'+CTX.playbackId+'/storyboard.json'+(CTX.sbToken?('?token='+encodeURIComponent(CTX.sbToken)):'');
-    fetch(u).then(function(r){ if(!r.ok)throw 0; return r.json(); }).then(function(j){
-      if(!j||!j.tiles||!j.tiles.length||!j.tile_width||!j.tile_height)throw 0;
-      var sprite=j.url||('https://image.mux.com/'+CTX.playbackId+'/storyboard.jpg');
-      if(sprite.indexOf('http')!==0) sprite='https://image.mux.com'+(sprite.charAt(0)==='/'?'':'/')+sprite;
-      if(CTX.sbToken&&sprite.indexOf('token=')<0) sprite+=(sprite.indexOf('?')<0?'?':'&')+'token='+encodeURIComponent(CTX.sbToken);
-      var mx=0,my=0; j.tiles.forEach(function(t){ if(t.x>mx)mx=t.x; if(t.y>my)my=t.y; });
-      CTX.sb={tw:j.tile_width,th:j.tile_height,tiles:j.tiles,sprite:sprite,sw:mx+j.tile_width,sh:my+j.tile_height};
-      CTX.sbLoading=false;
-      var sc=THUMB_W/CTX.sb.tw;
-      sbthumb.style.width=THUMB_W+'px';
-      sbthumb.style.height=Math.round(CTX.sb.th*sc)+'px';
-      sbthumb.style.backgroundImage='url("'+CTX.sb.sprite+'")';
-      sbthumb.style.backgroundSize=Math.round(CTX.sb.sw*sc)+'px '+Math.round(CTX.sb.sh*sc)+'px';
-      (new Image()).src=CTX.sb.sprite;
-    }).catch(function(){ CTX.sbLoading=false; CTX.sbNextTry=Date.now()+6000; });
-  }
-  function sbTileFor(t){ var a=CTX.sb.tiles,k=0; for(var i=0;i<a.length;i++){ if(a[i].start<=t)k=i; else break; } return a[k]; }
-  function showSb(t){
-    if(!CTX.sb){ loadSb(); return; }
-    if(!(CTX.duration>0))return;
-    t=Math.min(Math.max(0,t),CTX.duration);
-    var sc=THUMB_W/CTX.sb.tw,tile=sbTileFor(t);
-    sbthumb.style.backgroundPosition='-'+Math.round(tile.x*sc)+'px -'+Math.round(tile.y*sc)+'px';
-    sbtime.textContent=fmt(t);
-    sbprev.style.display='block';
-    var cx=tl.offsetLeft+(t/CTX.duration)*tl.offsetWidth,half=(sbprev.offsetWidth||THUMB_W)/2;
-    var wrapW=(sbprev.parentNode&&sbprev.parentNode.offsetWidth)||(tl.offsetLeft*2+tl.offsetWidth);
-    sbprev.style.left=Math.min(Math.max(cx,half+2),wrapW-half-2)+'px';
-  }
-  function hideSb(){ sbprev.style.display='none'; }
-  function timeFromX(cx){ var r=tl.getBoundingClientRect(); return Math.min(1,Math.max(0,(cx-r.left)/r.width))*(CTX.duration||0); }
-  tl.addEventListener('mousemove',function(e){ if(CTX.ready&&!scrubbing) showSb(timeFromX(e.clientX)); });
-  tl.addEventListener('mouseleave',function(){ if(!scrubbing) hideSb(); });
+  tl.addEventListener('pointerup',function(){scrubbing=false;commitSeek();});
+  tl.addEventListener('pointercancel',function(){scrubbing=false;commitSeek();});
 
   // --- load the most recent uploaded film ---
   var stageMsg=$('stageMsg');
@@ -521,7 +476,6 @@
     if(j && j.playbackToken) player.setAttribute('playback-token', j.playbackToken);
     else player.removeAttribute('playback-token');
     player.setAttribute('playback-id', j.playbackId);
-    CTX.playbackId=j.playbackId; CTX.sbToken=j.storyboardToken||''; loadSb();
   }
   function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; if(j.fps>0) FPS=j.fps; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; deckLock(); hideMsg(); }
   var loadPoll=null;
