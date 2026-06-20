@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@mux/mux-video" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@mux/upchunk@3/dist/upchunk.js" defer></script>
 <style>
   :root{
     --bg:#faf9f5; --surface:#ffffff; --text:#1a1a18; --text-soft:#6b6a64;
@@ -320,7 +321,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.7 &mdash; &#128290; One number everywhere: every page shows the live backend version</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.8 &mdash; &#128230; Resilient uploads: chunked &amp; auto-resume on connection drop</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -428,13 +429,19 @@
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
       .then(function(res){
         if(!res.ok){ renderUp('Couldn\u2019t start the upload: '+(res.j.error||'error'),'err'); return; }
+        if(state.uploadXhr){try{state.uploadXhr.abort();}catch(e){}state.uploadXhr=null;}
         state.sendId=res.j.sendId;
-        var xhr=new XMLHttpRequest(); state.uploadXhr=xhr;
-        xhr.open('PUT',res.j.uploadUrl,true);
-        xhr.upload.onprogress=function(e){ if(e.lengthComputable){ var p=Math.round(e.loaded/e.total*100); renderUp('Uploading to Mux <b>'+p+'%</b><span class="barwrap"><span class="bf" style="width:'+p+'%"></span></span>'); } };
-        xhr.onload=function(){ if(xhr.status>=200&&xhr.status<300){ renderUp('Uploaded \u00b7 transcoding<span class="barwrap"><span class="bf" style="width:100%"></span></span>'); pollStatus(state.sendId); } else { renderUp('Upload failed (HTTP '+xhr.status+').','err'); } };
-        xhr.onerror=function(){ renderUp('Upload failed \u2014 network error.','err'); };
-        xhr.send(file);
+        if(typeof UpChunk==='undefined'||!UpChunk.createUpload){ renderUp('Uploader didn\u2019t load \u2014 please refresh and try again.','err'); return; }
+        function bar(p){ return '<span class="barwrap"><span class="bf" style="width:'+p+'%"></span></span>'; }
+        var lastPct=0;
+        var up=UpChunk.createUpload({ endpoint:res.j.uploadUrl, file:file, chunkSize:8192, attempts:8, delayBeforeAttempt:2 });
+        state.uploadXhr=up;
+        up.on('progress',function(e){ var d=e.detail; var p=Math.max(0,Math.min(100,Math.round((typeof d==='number'?d:(d&&d.progress))||0))); lastPct=p; renderUp('Uploading <b>'+p+'%</b>'+bar(p)); });
+        up.on('attemptFailure',function(){ renderUp('Connection hiccup \u2014 retrying\u2026 <b>'+lastPct+'%</b>'+bar(lastPct)); });
+        up.on('offline',function(){ renderUp('Connection lost \u2014 will resume automatically <b>'+lastPct+'%</b>'+bar(lastPct)); });
+        up.on('online',function(){ renderUp('Reconnected \u2014 resuming\u2026 <b>'+lastPct+'%</b>'+bar(lastPct)); });
+        up.on('success',function(){ renderUp('Uploaded \u00b7 transcoding'+bar(100)); pollStatus(state.sendId); });
+        up.on('error',function(e){ renderUp('Upload failed \u2014 '+(((e.detail&&e.detail.message))||'please remove the file and try again')+'.','err'); });
       })
       .catch(function(){ renderUp('Couldn\u2019t reach the server.','err'); });
   }

@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.7 — 🔢 One number everywhere: every page shows the live backend version';
+const APP_VERSION = 'v0.9.8 — 📦 Resilient uploads: chunked + auto-resume on connection drop';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -454,6 +454,7 @@ app.post('/api/uploads', async (req, res) => {
       method: 'POST',
       body: {
         cors_origin: req.headers.origin || '*',
+        timeout: 86400,
         new_asset_settings: { playback_policies: [signed ? 'signed' : 'public'], video_quality: 'basic' }
       }
     });
