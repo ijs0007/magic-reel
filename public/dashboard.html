@@ -65,8 +65,9 @@
   .back svg{width:17px;height:17px}
   .dhead{display:flex;gap:15px;align-items:center}
   .dhead .poster{width:74px;height:74px}
-  .dhead .dt{font-size:19px;font-weight:600;line-height:1.2}
-  .dhead .ds{font-size:12.5px;color:var(--text-soft);margin-top:3px}
+  .dhead>div:not(.poster){min-width:0}
+  .dhead .dt{font-size:19px;font-weight:600;line-height:1.2;overflow-wrap:anywhere;word-break:break-word}
+  .dhead .ds{font-size:12.5px;color:var(--text-soft);margin-top:3px;overflow-wrap:anywhere}
   .dsum{margin:18px 0 4px}
   .dsum .head{font-size:13.5px;font-weight:500;margin-bottom:10px}
   .dsum .head b{font-weight:700}
@@ -92,7 +93,7 @@
   .sheet-top .ava{width:50px;height:50px;font-size:17px}
   .sheet-top .who{flex:1 1 auto;min-width:0}
   .sheet-top .who h4{margin:0;font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-  .sheet-top .who span{font-size:12.5px;color:var(--text-soft)}
+  .sheet-top .who span{font-size:12.5px;color:var(--text-soft);overflow-wrap:anywhere}
   .sheet-body{padding:14px 22px 20px}
   .fsec{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);opacity:.72;margin:16px 0 8px}
   .fsec:first-child{margin-top:2px}
@@ -169,7 +170,7 @@
 
   <div id="detailView" class="hidden"></div>
 
-  <footer class="ver">Magic Reel &middot; v0.8.3 &mdash; &#127899;&#65039; Dashboard actions: resend, nudge, bump budget</footer>
+  <footer class="ver">Magic Reel &middot; v0.9.2 &mdash; &#128241; Dashboard mobile: long titles &amp; emails wrap</footer>
 </div>
 
 <div class="scrim" id="sheetScrim"><div class="sheet" id="recSheet"></div></div>
