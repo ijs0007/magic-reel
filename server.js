@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.13 — 🏷️ Accurate download quality label (1080p)';
+const APP_VERSION = 'v0.9.14 — 📨 Expiring nudge now covers partial downloads';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -556,7 +556,7 @@ const MIN_CLIP_SECONDS = 0.5;   // Mux requires clips of at least 500 ms
 const MAX_ASSETS = 8;           // hard floor: never hold more than this many live master assets (Mux free tier caps at 10; leaves headroom for transient clip-assets)
 const LINK_TTL_DAYS = 14;       // a recipient link (and its master asset) lives this long, then is cleaned up
 const FULLY_DOWNLOADED_GRACE_HOURS = 24; // once EVERY recipient has pulled a cut, shorten the link's life to this so footage doesn't linger the full TTL
-const EXPIRING_SOON_HOURS = 48;          // one-time heads-up email to recipients who haven't downloaded when their link is within this window of expiry
+const EXPIRING_SOON_HOURS = 48;          // one-time heads-up email to recipients who haven't used their full budget when their link is within this window of expiry
 const POLL_MS = 2500;
 const CLIP_TIMEOUT_MS = 6 * 60 * 1000;
 const STITCH_TIMEOUT_MS = 3 * 60 * 1000;
@@ -1130,7 +1130,7 @@ async function notifyExpiringSoon() {
     " WHERE s.asset_id IS NOT NULL AND s.asset_deleted_at IS NULL" +
     " AND s.expires_at IS NOT NULL AND s.expires_at > now() AND s.expires_at < now() + interval '" + EXPIRING_SOON_HOURS + " hours'" +
     " AND rec.email IS NOT NULL AND rec.email <> ''" +
-    " AND rec.used_seconds <= 0.05" +
+    " AND rec.used_seconds < rec.budget_seconds - 0.5" +
     " AND rec.expiring_notified_at IS NULL");
   for (const r of q.rows) {
     const out = await sendReelExpiringEmail(r.email, r.name, PUBLIC_BASE_URL + '/r/' + r.token, r.film_name, r.budget_seconds, r.expires_at);
