@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.19 — ✉️ Simpler email + mobile scrub surface';
+const APP_VERSION = 'v0.9.20 — 🎛️ Tidier recipient controls';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

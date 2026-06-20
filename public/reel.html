@@ -168,17 +168,23 @@
   .mbtn2.addm:hover:not(:disabled){opacity:.9;border-color:var(--accent);color:var(--accent-text)}
   .mbtn2.addm:disabled{opacity:.4;cursor:default;background:var(--field);border-color:var(--border);color:var(--text-soft)}
   @media (max-width:540px){
-    #deck .dk-speed,#deck .dk-budget,#tHome,#tRev,#tPlay,#tFwd,#tEnd,#deck .deckhint{display:none}
-    #deck .deckhead{justify-content:center;margin-bottom:8px}
-    #deck .kcaps{gap:12px}
-    #tFrameBack,#tFrameFwd{flex:0 0 auto;min-width:84px;max-width:none;padding:11px 4px 7px}
-    .markrow{gap:8px}
+    #deck .dk-speed,#tHome,#tRev,#tPlay,#tFwd,#tEnd,#deck .deckhint{display:none}
+    #deck .deckhead{justify-content:space-between;margin-bottom:9px}
+    #deck .dk-budget{display:inline}
+    /* nudge -> one segmented pill */
+    #deck .kcaps{gap:0;max-width:300px;margin:0 auto}
+    #tFrameBack,#tFrameFwd{flex:1 1 0;min-width:0;max-width:none;padding:12px 4px}
+    #tFrameBack .kl,#tFrameFwd .kl{display:none}
+    #tFrameBack{border-radius:11px 0 0 11px;border-right:none}
+    #tFrameFwd{border-radius:0 11px 11px 0}
+    /* mark in/out + add -> one segmented pill */
+    .markrow{gap:0}
     .markrow .mr-l,.markrow .mr-r{display:contents}
-    .mbtn2{flex:1 1 0;width:auto;max-width:none;height:48px}
-    #fitBtn{order:1}
-    #markInBtn{order:2}
-    #markOutBtn{order:3}
-    #addBtn{order:4}
+    .mbtn2{flex:1 1 0;width:auto;max-width:none;height:50px;border-radius:0}
+    #fitBtn{order:1;border-radius:11px 0 0 11px;border-right:none}
+    #markInBtn{order:2;border-right:none}
+    #markOutBtn{order:3;border-right:none}
+    #addBtn{order:4;border-radius:0 11px 11px 0}
   }
 
   /* transport / review deck — keyboard legend on desktop, tap controls on mobile */
@@ -245,8 +251,8 @@
   <div class="greet">
     <div class="ava" id="grAva">EV</div>
     <div>
-      <div class="gt">Hi <b id="grName">Eleanor</b> &mdash; <b id="grSender">Isaiah Smith</b> shared footage for your reel.</div>
-      <div class="gs"><b id="grFilm">The Lighthouse Keeper</b> &middot; preview is watermarked &middot; <b id="grCap">Isaiah set your reel length to 2:00</b>.</div>
+      <div class="gt">Hi <b id="grName">Eleanor</b> &mdash; footage from <b id="grSender">Isaiah Smith</b>.</div>
+      <div class="gs"><b id="grFilm">The Lighthouse Keeper</b> &middot; up to <b id="grCap">2:00</b></div>
     </div>
   </div>
 
@@ -318,12 +324,12 @@
         <div class="meter"><div class="fill" id="fill"></div></div>
       </div>
       <div class="seglist" id="seglist">
-        <div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M7 7l-5 5 5 5M17 7l5 5-5 5"/></svg><div>Mark an In and Out, then add the clip to start your reel.</div></div>
+        <div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M7 7l-5 5 5 5M17 7l5 5-5 5"/></svg><div>Your clips appear here.</div></div>
       </div>
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.19 &mdash; &#9993;&#65039; Simpler email + scrub surface</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.20 &mdash; &#127899;&#65039; Tidier recipient controls</footer>
 </div>
 
 <div class="bar">
@@ -342,6 +348,7 @@
   var TOKEN=(location.pathname.match(/^\/r\/([^\/?#]+)/)||[])[1]||null;
   var $=function(id){return document.getElementById(id);};
   function fmt(s){s=Math.max(0,Math.round(s));var m=Math.floor(s/60),ss=s%60;return m+':'+(ss<10?'0':'')+ss;}
+  function stripExtJS(s){return String(s||'').replace(/[.](mov|mp4|m4v|avi|mkv|webm|mpg|mpeg|wmv|flv|mts|m2ts|ts|prores|mxf|r3d|braw|3gp|ogv|vob|qt|dv)$/i,'');}
 
   $('themeBtn').addEventListener('click',function(){var d=document.body.classList.toggle('dark');$('themeBtn').innerHTML=d?'&#9728;&#65039;':'&#127769;';$('themeColorMeta').setAttribute('content',d?'#1a1a1c':'#faf9f5');});
 
@@ -372,7 +379,7 @@
   $('grName').textContent='there';
   $('grSender').textContent=CTX.sender;
   $('grFilm').textContent=CTX.film;
-  $('grCap').textContent=CTX.sender.split(' ')[0]+' set your reel length to '+fmt(CTX.budget);
+  $('grCap').textContent=fmt(CTX.budget);
   $('grAva').textContent='\u2726';
   $('tot').textContent='/ '+fmt(CTX.duration);
 
@@ -488,21 +495,19 @@
     else player.removeAttribute('playback-token');
     player.setAttribute('playback-id', j.playbackId);
   }
-  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; if(j.fps>0) FPS=j.fps; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; deckLock(); hideMsg(); }
+  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=stripExtJS(j.filmName)||CTX.film; if(j.fps>0) FPS=j.fps; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; deckLock(); hideMsg(); }
   var loadPoll=null;
   function checkSend(id){ fetch('/api/sends/'+id+'/status').then(function(r){return r.json();}).then(function(j){ if(j.status==='ready'&&j.playbackId){ clearTimeout(loadPoll); loadFilm(j); } else if(j.status==='error'){ clearTimeout(loadPoll); showMsg('This film couldn\u2019t be processed.',false); } else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(function(){checkSend(id);},3000); } }).catch(function(){ loadPoll=setTimeout(function(){checkSend(id);},4000); }); }
   // Token mode: load this recipient's film + their personal budget from the server.
   // No token (opened at /): fall back to the latest-upload demo behavior.
   function applyRecipient(j){
-    CTX.name=j.name||CTX.name; CTX.film=j.filmName||CTX.film;
+    CTX.name=j.name||CTX.name; CTX.film=stripExtJS(j.filmName)||CTX.film;
     if(j.fps>0) FPS=j.fps;
     if(typeof j.budgetSeconds==='number') CTX.budget=j.budgetSeconds;
     if(typeof j.usedSeconds==='number') CTX.used=j.usedSeconds;
     $('grName').textContent=CTX.name; $('grAva').textContent=initials(CTX.name);
     $('grFilm').textContent=CTX.film;
-    var capLine=CTX.sender.split(' ')[0]+' set your reel length to '+fmt(CTX.budget);
-    if(j.expiresAt){ var ed=new Date(j.expiresAt); if(!isNaN(ed.getTime())) capLine+=' \u00b7 link expires '+ed.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
-    $('grCap').textContent=capLine;
+    $('grCap').textContent=fmt(CTX.budget);
     setWatermark(CTX.name);
     if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); }
     updateMarkers(); renderSegments(); renderBudget();
@@ -529,7 +534,7 @@
       return r.json();
     }).then(function(j){
       if(!j || j.none){ showMsg('No footage has been uploaded yet. Drop a film on the send screen first.',false); return; }
-      CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film;
+      CTX.film=stripExtJS(j.filmName)||CTX.film; $('grFilm').textContent=CTX.film;
       if(j.status==='ready'&&j.playbackId){ loadFilm(j); } else { checkSend(j.sendId); }
     }).catch(function(){ showMsg('Couldn\u2019t reach the server.',false); });
   }
@@ -572,8 +577,8 @@
       if(fo>0.05){c.className='candidate';msg+=' <span class="olapnote">'+fmt(fo)+' overlaps footage you already picked.</span>';}else{c.className='candidate ready';}
       c.innerHTML=msg;add.disabled=false;return;
     }
-    if(st.markIn==null){c.textContent='Mark an In point to start a clip \u2014 or use your remaining time as a block.';return;}
-    if(st.markOut==null){c.innerHTML='In set at <b>'+fmt(st.markIn)+'</b> \u2014 now scrub forward and Mark Out.';return;}
+    if(st.markIn==null){c.textContent='Mark an In point to start.';return;}
+    if(st.markOut==null){c.innerHTML='In at <b>'+fmt(st.markIn)+'</b> — now Mark Out.';return;}
     if(st.markOut<=st.markIn){c.className='candidate warn';c.textContent='Out must come after In. Scrub past your In point.';return;}
     var len=st.markOut-st.markIn,rem=remaining();
     if(len>rem){c.className='candidate warn';c.innerHTML='Clip is <b>'+fmt(len)+'</b> but only <b>'+fmt(rem)+'</b> left \u2014 shorten it or remove a clip.';return;}
@@ -646,7 +651,7 @@
     st.segments.forEach(function(s){var d=document.createElement('div');d.className='seg';d.style.left=pct(s.in)+'%';d.style.width=pct(s.out-s.in)+'%';layer.appendChild(d);});
     renderOverlap();
     var list=$('seglist');
-    if(!st.segments.length){list.innerHTML='<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M7 7l-5 5 5 5M17 7l5 5-5 5"/></svg><div>Mark an In and Out, then add the clip to start your reel.</div></div>';return;}
+    if(!st.segments.length){list.innerHTML='<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M7 7l-5 5 5 5M17 7l5 5-5 5"/></svg><div>Your clips appear here.</div></div>';return;}
     list.innerHTML='';
     st.segments.forEach(function(s,idx){
       var row=document.createElement('div');row.className='segrow';
