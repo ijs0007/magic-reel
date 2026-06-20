@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.8 — 📦 Resilient uploads: chunked + auto-resume on connection drop';
+const APP_VERSION = 'v0.9.9 — 📊 Live transcode progress + clearer offline status';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -505,7 +505,8 @@ app.get('/api/sends/:id/status', async (req, res) => {
         }
       } catch (e) { /* transient — report what we have so far */ }
     }
-    // Step 2: we have an asset -> read its status / playback id / duration.
+    // Step 2: we have an asset -> read its status / playback id / duration / transcode progress.
+    let liveProgress = null, liveState = null;
     if (row.asset_id) {
       try {
         const a = await muxFetch('/video/v1/assets/' + row.asset_id);
@@ -517,12 +518,18 @@ app.get('/api/sends/:id/status', async (req, res) => {
         let rawFps = a.max_stored_frame_rate;
         if (!(rawFps > 0)) { const vt = a.tracks && a.tracks.filter(t => t.type === 'video')[0]; rawFps = vt && vt.max_frame_rate; }
         if (rawFps > 0) row.fps = rawFps;
+        // Mux reports a real transcode progress while the asset is preparing (especially for
+        // non-standard input like high-bitrate files). Forward it so the sender sees a true %.
+        if (a.progress) { liveProgress = a.progress.progress; liveState = a.progress.state; }
         row.status = a.status === 'ready' ? 'ready' : (a.status === 'errored' ? 'error' : 'processing');
         await pool.query('UPDATE reel_sends SET playback_id = $1, duration = $2, fps = $3, status = $4 WHERE id = $5',
           [row.playback_id || null, row.duration || null, row.fps || null, row.status, row.id]);
       } catch (e) { /* transient */ }
     }
-    res.json(publicSend(row));
+    const out = publicSend(row);
+    if (typeof liveProgress === 'number') out.progress = liveProgress;
+    if (liveState) out.progressState = liveState;
+    res.json(out);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

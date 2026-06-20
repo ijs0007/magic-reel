@@ -56,6 +56,8 @@
   .up-status b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
   .up-status .barwrap{flex:1;height:7px;border-radius:5px;background:var(--pick-bg);overflow:hidden;min-width:120px;max-width:240px}
   .up-status .barwrap .bf{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--t1),var(--t2));transition:width .2s}
+  .up-status .barwrap .bf.bf-indet{width:40%;animation:bf-indet 1.1s ease-in-out infinite}
+  @keyframes bf-indet{0%{margin-left:-40%}100%{margin-left:100%}}
   .up-status.ready{color:var(--good)} .up-status.ready b{color:var(--good)}
   .up-status.err{color:var(--err)}
   .up-preview{margin-top:13px}
@@ -321,7 +323,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.8 &mdash; &#128230; Resilient uploads: chunked &amp; auto-resume on connection drop</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.9 &mdash; &#128202; Live transcode progress &amp; clearer offline status</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -438,10 +440,10 @@
         state.uploadXhr=up;
         up.on('progress',function(e){ var d=e.detail; var p=Math.max(0,Math.min(100,Math.round((typeof d==='number'?d:(d&&d.progress))||0))); lastPct=p; renderUp('Uploading <b>'+p+'%</b>'+bar(p)); });
         up.on('attemptFailure',function(){ renderUp('Connection hiccup \u2014 retrying\u2026 <b>'+lastPct+'%</b>'+bar(lastPct)); });
-        up.on('offline',function(){ renderUp('Connection lost \u2014 will resume automatically <b>'+lastPct+'%</b>'+bar(lastPct)); });
+        up.on('offline',function(){ renderUp('Connection lost \u2014 will resume when you\u2019re back online <b>'+lastPct+'%</b>'+bar(lastPct)); });
         up.on('online',function(){ renderUp('Reconnected \u2014 resuming\u2026 <b>'+lastPct+'%</b>'+bar(lastPct)); });
         up.on('success',function(){ renderUp('Uploaded \u00b7 transcoding'+bar(100)); pollStatus(state.sendId); });
-        up.on('error',function(e){ renderUp('Upload failed \u2014 '+(((e.detail&&e.detail.message))||'please remove the file and try again')+'.','err'); });
+        up.on('error',function(e){ var msg=(e.detail&&e.detail.message)||''; if(!navigator.onLine||/responded with 0/i.test(msg)||/network/i.test(msg)){ renderUp('Connection lost \u2014 will resume when you\u2019re back online <b>'+lastPct+'%</b>'+bar(lastPct)); } else { renderUp('Upload failed \u2014 '+(msg||'please remove the file and try again')+'.','err'); } });
       })
       .catch(function(){ renderUp('Couldn\u2019t reach the server.','err'); });
   }
@@ -451,7 +453,12 @@
       if(sendId!==state.sendId) return; // a newer file replaced this one
       if(j.status==='ready'){ state.playbackId=j.playbackId; renderUp('Transcoded and ready','ready'); showPreview(j); }
       else if(j.status==='error'){ renderUp('Mux couldn\u2019t process this file.','err'); }
-      else { renderUp('Transcoding\u2026 this can take a moment<span class="barwrap"><span class="bf" style="width:100%"></span></span>'); state.pollTimer=setTimeout(function(){pollStatus(sendId);},3000); }
+      else {
+        var pr=(typeof j.progress==='number')?j.progress:-1;
+        if(pr>0&&pr<100){ var pp=Math.min(99,Math.max(1,Math.round(pr))); renderUp('Processing on Mux <b>'+pp+'%</b><span class="barwrap"><span class="bf" style="width:'+pp+'%"></span></span>'); }
+        else { renderUp('Processing on Mux\u2026 this can take a moment<span class="barwrap"><span class="bf bf-indet"></span></span>'); }
+        state.pollTimer=setTimeout(function(){pollStatus(sendId);},3000);
+      }
     }).catch(function(){ state.pollTimer=setTimeout(function(){pollStatus(sendId);},4000); });
   }
   function showPreview(j){
