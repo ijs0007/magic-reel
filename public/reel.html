@@ -323,7 +323,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.12 &mdash; &#9986;&#65039; Removed scrub thumbnails</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.13 &mdash; &#127991;&#65039; Accurate download quality label</footer>
 </div>
 
 <div class="bar">
@@ -686,7 +686,7 @@
   function renderReady(jobId){
     building=false;
     var u=used(),n=st.segments.length;
-    dlModal.innerHTML='<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Your reel is ready</h3><p class="lede">Clean, no watermark \u2014 cut from the master.</p><div class="summary"><div class="row"><span class="k">Clips</span><span class="v">'+n+'</span></div><div class="row"><span class="k">Total length</span><span class="v">'+fmt(u)+'</span></div><div class="row"><span class="k">Quality</span><span class="v">Up to source</span></div><div class="row"><span class="k">Watermark</span><span class="v">None</span></div></div><button class="modalbtn" id="saveBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>Save to device</button><button class="modalghost" id="closeDl">Back to selecting</button>';
+    dlModal.innerHTML='<div class="okring"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div><h3>Your reel is ready</h3><p class="lede">Clean, no watermark \u2014 cut from the master.</p><div class="summary"><div class="row"><span class="k">Clips</span><span class="v">'+n+'</span></div><div class="row"><span class="k">Total length</span><span class="v">'+fmt(u)+'</span></div><div class="row"><span class="k">Quality</span><span class="v">Up to 1080p</span></div><div class="row"><span class="k">Watermark</span><span class="v">None</span></div></div><button class="modalbtn" id="saveBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>Save to device</button><button class="modalghost" id="closeDl">Back to selecting</button>';
     $('saveBtn').addEventListener('click',function(){var a=document.createElement('a');a.href='/api/cuts/'+jobId+'/download';a.download='';document.body.appendChild(a);a.click();a.remove();});
     $('closeDl').addEventListener('click',function(){dlScrim.classList.remove('show');});
     // metered: those seconds are now spent — fold them into the running total and reset the selection
