@@ -323,7 +323,7 @@
     </div>
   </div>
 
-  <footer class="ver">Magic Reel &middot; v0.9.1 &mdash; &#10024; Scrub polish: smoother seeking, mobile button order</footer>
+  <footer class="ver">Magic Reel &middot; v0.9.3 &mdash; &#127902;&#65039; Real source fps: accurate frame-step</footer>
 </div>
 
 <div class="bar">
@@ -383,7 +383,7 @@
 
   // --- transport engine: forward uses native playbackRate; reverse is SIMULATED by
   //     stepping currentTime backward on a timer (HLS has no negative playbackRate). ---
-  var FPS=24;                 // browsers can't reliably expose source fps; 24 is the film default
+  var FPS=24;                 // overridden with the real source fps from the server when known; 24 is the fallback
   var FWD=[1,2,4,8], REV=[1,2,4,8];
   var transport={dir:0,rate:0,timer:null,last:0};
   var ICO_PLAY='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
@@ -477,13 +477,14 @@
     else player.removeAttribute('playback-token');
     player.setAttribute('playback-id', j.playbackId);
   }
-  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; deckLock(); hideMsg(); }
+  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=j.filmName||CTX.film; if(j.fps>0) FPS=j.fps; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; deckLock(); hideMsg(); }
   var loadPoll=null;
   function checkSend(id){ fetch('/api/sends/'+id+'/status').then(function(r){return r.json();}).then(function(j){ if(j.status==='ready'&&j.playbackId){ clearTimeout(loadPoll); loadFilm(j); } else if(j.status==='error'){ clearTimeout(loadPoll); showMsg('This film couldn\u2019t be processed.',false); } else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(function(){checkSend(id);},3000); } }).catch(function(){ loadPoll=setTimeout(function(){checkSend(id);},4000); }); }
   // Token mode: load this recipient's film + their personal budget from the server.
   // No token (opened at /): fall back to the latest-upload demo behavior.
   function applyRecipient(j){
     CTX.name=j.name||CTX.name; CTX.film=j.filmName||CTX.film;
+    if(j.fps>0) FPS=j.fps;
     if(typeof j.budgetSeconds==='number') CTX.budget=j.budgetSeconds;
     if(typeof j.usedSeconds==='number') CTX.used=j.usedSeconds;
     $('grName').textContent=CTX.name; $('grAva').textContent=initials(CTX.name);

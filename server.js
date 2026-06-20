@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.8.4 — ⏳ Retention: link expiry, asset floor, graceful expired page';
+const APP_VERSION = 'v0.9.3 — 🎞️ Real source fps: accurate frame-step from Mux';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -257,6 +257,7 @@ async function ensureSchema() {
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS playback_signed BOOLEAN NOT NULL DEFAULT false');
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ');
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS asset_deleted_at TIMESTAMPTZ');
+  await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS fps DOUBLE PRECISION');
   // Backfill expiry for rows that predate the column (LINK_TTL_DAYS is an in-code integer, no injection).
   await pool.query("UPDATE reel_sends SET expires_at = created_at + interval '" + LINK_TTL_DAYS + " days' WHERE expires_at IS NULL");
   await pool.query(
@@ -278,7 +279,7 @@ async function ensureSchema() {
 }
 function publicSend(r) {
   return Object.assign(
-    { sendId: r.id, filmName: r.film_name, status: r.status, playbackId: r.playback_id, duration: r.duration },
+    { sendId: r.id, filmName: r.film_name, status: r.status, playbackId: r.playback_id, duration: r.duration, fps: r.fps },
     playbackTokens(r.playback_id, r.playback_signed)
   );
 }
@@ -472,9 +473,14 @@ app.get('/api/sends/:id/status', async (req, res) => {
         const pid = a.playback_ids && a.playback_ids[0] && a.playback_ids[0].id;
         row.playback_id = pid || row.playback_id;
         row.duration = a.duration || row.duration;
+        // Real source fps so the recipient's frame-step is accurate. Mux returns -1 when it
+        // can't determine it; in that case leave fps null and the client falls back to 24.
+        let rawFps = a.max_stored_frame_rate;
+        if (!(rawFps > 0)) { const vt = a.tracks && a.tracks.filter(t => t.type === 'video')[0]; rawFps = vt && vt.max_frame_rate; }
+        if (rawFps > 0) row.fps = rawFps;
         row.status = a.status === 'ready' ? 'ready' : (a.status === 'errored' ? 'error' : 'processing');
-        await pool.query('UPDATE reel_sends SET playback_id = $1, duration = $2, status = $3 WHERE id = $4',
-          [row.playback_id || null, row.duration || null, row.status, row.id]);
+        await pool.query('UPDATE reel_sends SET playback_id = $1, duration = $2, fps = $3, status = $4 WHERE id = $5',
+          [row.playback_id || null, row.duration || null, row.fps || null, row.status, row.id]);
       } catch (e) { /* transient */ }
     }
     res.json(publicSend(row));
@@ -852,7 +858,7 @@ app.get('/api/r/:token', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
   try {
     const r = await pool.query(
-      'SELECT rec.name, rec.budget_seconds, rec.used_seconds, s.film_name, s.playback_id, s.playback_signed, s.duration, s.status, s.expires_at, s.asset_deleted_at' +
+      'SELECT rec.name, rec.budget_seconds, rec.used_seconds, s.film_name, s.playback_id, s.playback_signed, s.duration, s.fps, s.status, s.expires_at, s.asset_deleted_at' +
       ' FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
       [req.params.token]);
     if (!r.rows.length) return res.status(404).json({ error: 'This link is not valid.' });
@@ -864,7 +870,7 @@ app.get('/api/r/:token', async (req, res) => {
     pool.query('UPDATE reel_recipients SET opened_at = COALESCE(opened_at, now()) WHERE token = $1', [req.params.token]).catch(function () {});
     res.json(Object.assign({
       name: row.name, filmName: row.film_name, playbackId: row.playback_id,
-      duration: row.duration, budgetSeconds: row.budget_seconds,
+      duration: row.duration, fps: row.fps, budgetSeconds: row.budget_seconds,
       usedSeconds: Number(row.used_seconds) || 0, status: row.status,
       expiresAt: row.expires_at
     }, playbackTokens(row.playback_id, row.playback_signed)));
