@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.24 — 🔒 Bigger watermark + brand subject';
+const APP_VERSION = 'v0.10.0 — 🎬 Studio: tabbed Send · Preview · Dashboard · Settings';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -122,6 +122,16 @@ function reelReadyLine(phrase, cap) {
   ];
   return L[Math.floor(Math.random() * L.length)];
 }
+// Owner-editable email message (Studio -> Settings). Returns safe defaults if the
+// table/row is missing or anything fails, so email sending never breaks on it.
+async function getReelSettings() {
+  if (!pool) return { customMessage: '', useCustom: false };
+  try {
+    const q = await pool.query('SELECT custom_message, use_custom FROM reel_settings WHERE id = 1');
+    if (!q.rows.length) return { customMessage: '', useCustom: false };
+    return { customMessage: q.rows[0].custom_message || '', useCustom: !!q.rows[0].use_custom };
+  } catch (e) { return { customMessage: '', useCustom: false }; }
+}
 async function sendReelEmail(to, name, link, filmName, budgetSeconds, sourceFile) {
   if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
   to = String(to || '').trim();
@@ -131,7 +141,16 @@ async function sendReelEmail(to, name, link, filmName, budgetSeconds, sourceFile
   var phrase = named ? '\u201c' + emailEsc(film) + '\u201d' : 'your footage';
   var cap = fmtClock(budgetSeconds);
   var subject = 'Magic Reel | ' + (named ? film + ' | ' : '') + 'Choose Your Selects';
-  var html = emailShell(emailEsc(reelFirstName(name)), reelReadyLine(phrase, cap), link, emailEsc(sourceFile || ''));
+  var bodyHtml = reelReadyLine(phrase, cap);
+  try {
+    var st = await getReelSettings();
+    if (st.useCustom && st.customMessage && st.customMessage.trim()) {
+      // Escape literal text first, then expand the known tokens (plain text only).
+      var titleTok = named ? film : 'your footage';
+      bodyHtml = emailEsc(st.customMessage).split('{title}').join(emailEsc(titleTok)).split('{name}').join(emailEsc(reelFirstName(name))).split('{time}').join(cap);
+    }
+  } catch (e) {}
+  var html = emailShell(emailEsc(reelFirstName(name)), bodyHtml, link, emailEsc(sourceFile || ''));
   try {
     var r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -325,6 +344,18 @@ async function ensureSchema() {
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS opened_at TIMESTAMPTZ');
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS last_cut_at TIMESTAMPTZ');
   await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS expiring_notified_at TIMESTAMPTZ');
+  // Studio: a dedicated, flagged "Preview" recipient backs the Preview tab so the
+  // owner can scrub/mark without polluting any real recipient's usage.
+  await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS is_preview BOOLEAN DEFAULT false');
+  // Studio: owner-editable email message (single owner row, id = 1).
+  await pool.query(
+    'CREATE TABLE IF NOT EXISTS reel_settings (' +
+    ' id INTEGER PRIMARY KEY DEFAULT 1,' +
+    ' custom_message TEXT,' +
+    ' use_custom BOOLEAN NOT NULL DEFAULT false,' +
+    ' updated_at TIMESTAMPTZ NOT NULL DEFAULT now()' +
+    ')'
+  );
 }
 function publicSend(r) {
   return Object.assign(
@@ -365,6 +396,11 @@ app.get('/dashboard', (req, res) =>
 app.get('/r/:token?', (req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'reel.html'), { headers: { 'Cache-Control': 'no-store, max-age=0' } }));
 
+// Studio shell: one tabbed space wrapping Send / Preview / Dashboard / Settings.
+// Gated like the rest of the owner surface (not in the gate's exempt list).
+app.get('/studio', (req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'studio.html'), { headers: { 'Cache-Control': 'no-store, max-age=0' } }));
+
 // --- health check: confirms the service is up and the database is reachable ---
 app.get('/health', async (req, res) => {
   const base = { ok: true, version: APP_VERSION, mux: muxConfigured(), ffmpeg: !!ffmpegPath, resend: resendConfigured(), signing: signingConfigured(), dashboardAuth: !!DASHBOARD_PASSWORD };
@@ -385,7 +421,7 @@ app.get('/api/dashboard', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
   try {
     const sends = await pool.query('SELECT id, film_name, status, duration, created_at FROM reel_sends ORDER BY created_at DESC');
-    const recips = await pool.query('SELECT token, send_id, name, email, budget_seconds, used_seconds, created_at, opened_at, last_cut_at FROM reel_recipients ORDER BY created_at ASC');
+    const recips = await pool.query('SELECT token, send_id, name, email, budget_seconds, used_seconds, created_at, opened_at, last_cut_at FROM reel_recipients WHERE is_preview IS NOT TRUE ORDER BY created_at ASC');
     const bySend = {};
     recips.rows.forEach(function (r) {
       (bySend[r.send_id] = bySend[r.send_id] || []).push({
@@ -509,6 +545,50 @@ app.get('/api/sends/latest', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Studio Preview tab: a recipient link for the most recent send, via a dedicated
+// flagged "Preview" recipient (created once per send, on demand) so scrubbing/marking
+// in Preview never touches a real recipient's used_seconds. Gated (owner-only); the
+// returned token loads /r/<token>?embed=1, which is itself ungated like any reel link.
+app.get('/api/latest-preview', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const s = await pool.query('SELECT id, film_name FROM reel_sends ORDER BY created_at DESC LIMIT 1');
+    if (!s.rows.length) return res.json({ none: true });
+    const sendId = s.rows[0].id;
+    const filmName = s.rows[0].film_name || 'Untitled';
+    const ex = await pool.query('SELECT token FROM reel_recipients WHERE send_id = $1 AND is_preview IS TRUE ORDER BY created_at ASC LIMIT 1', [sendId]);
+    let token;
+    if (ex.rows.length) { token = ex.rows[0].token; }
+    else {
+      token = genToken();
+      await pool.query(
+        'INSERT INTO reel_recipients (token, send_id, name, email, budget_seconds, is_preview) VALUES ($1, $2, $3, $4, $5, true)',
+        [token, sendId, 'Preview', null, MAX_CUT_SECONDS]);
+    }
+    res.json({ token: token, filmName: filmName, sendId: sendId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Studio Settings tab: owner-editable email message. Both endpoints are owner-only
+// (whole-app gate). Blank/!useCustom => the default rotating lines are used.
+app.get('/api/settings', async (req, res) => {
+  const st = await getReelSettings();
+  res.json({ customMessage: st.customMessage, useCustom: st.useCustom });
+});
+app.post('/api/settings', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const b = req.body || {};
+    const msg = String(b.customMessage == null ? '' : b.customMessage).slice(0, 2000);
+    const use = b.useCustom === true;
+    await pool.query(
+      'INSERT INTO reel_settings (id, custom_message, use_custom, updated_at) VALUES (1, $1, $2, now())' +
+      ' ON CONFLICT (id) DO UPDATE SET custom_message = EXCLUDED.custom_message, use_custom = EXCLUDED.use_custom, updated_at = now()',
+      [msg, use]);
+    res.json({ ok: true, customMessage: msg, useCustom: use });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Poll an upload's progress through Mux: upload -> asset created -> asset ready.
@@ -1143,8 +1223,8 @@ async function accelerateFullyDownloaded() {
     "UPDATE reel_sends s SET expires_at = now() + interval '" + FULLY_DOWNLOADED_GRACE_HOURS + " hours'" +
     " WHERE s.asset_id IS NOT NULL AND s.asset_deleted_at IS NULL" +
     " AND (s.expires_at IS NULL OR s.expires_at > now() + interval '" + FULLY_DOWNLOADED_GRACE_HOURS + " hours')" +
-    " AND EXISTS (SELECT 1 FROM reel_recipients r WHERE r.send_id = s.id)" +
-    " AND NOT EXISTS (SELECT 1 FROM reel_recipients r WHERE r.send_id = s.id AND r.used_seconds <= 0.05)");
+    " AND EXISTS (SELECT 1 FROM reel_recipients r WHERE r.send_id = s.id AND r.is_preview IS NOT TRUE)" +
+    " AND NOT EXISTS (SELECT 1 FROM reel_recipients r WHERE r.send_id = s.id AND r.is_preview IS NOT TRUE AND r.used_seconds <= 0.05)");
 }
 
 // One-time "your link expires soon" email to recipients who still haven't grabbed anything.
@@ -1161,6 +1241,7 @@ async function notifyExpiringSoon() {
     " AND s.expires_at IS NOT NULL AND s.expires_at > now() AND s.expires_at < now() + interval '" + EXPIRING_SOON_HOURS + " hours'" +
     " AND rec.email IS NOT NULL AND rec.email <> ''" +
     " AND rec.used_seconds < rec.budget_seconds - 0.5" +
+    " AND rec.is_preview IS NOT TRUE" +
     " AND rec.expiring_notified_at IS NULL");
   for (const r of q.rows) {
     const out = await sendReelExpiringEmail(r.email, r.name, PUBLIC_BASE_URL + '/r/' + r.token, r.film_name, r.budget_seconds, r.expires_at);

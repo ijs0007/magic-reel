@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" id="themeColorMeta" content="#1a1a1c">
+<title>Magic Reel &mdash; Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf9f5; --surface:#ffffff; --text:#1a1a18; --text-soft:#6b6a64;
+    --border:rgba(0,0,0,0.10); --accent:#7c4dff; --accent-text:#fff; --field:#ffffff;
+    --good:#2e9e6b; --pick:#1a1a18; --pick-bg:#f3f1ea; --err:#b5402f;
+    --t1:#9a78ff; --t2:#7c4dff; --t3:#c77dff;
+  }
+  body.dark{
+    --bg:#1a1a1c; --surface:#252528; --text:#ececec; --text-soft:#9a9a9e;
+    --border:rgba(255,255,255,0.14); --accent:#7c4dff; --accent-text:#fff; --field:#2e2e32;
+    --good:#43c48a; --pick:#e8e8e8; --pick-bg:#34343a; --err:#e0796a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column;
+  }
+
+  /* ---------- Header (brand row) ---------- */
+  header{
+    flex:0 0 auto;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px 12px; border-bottom:1px solid var(--border);
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:700;font-family:'Poppins','Segoe UI',-apple-system,sans-serif;letter-spacing:-.01em}
+  .brand .star{font-size:20px;color:var(--t2)}
+  .brand .wm{background:linear-gradient(92deg,var(--t1),var(--t2) 55%,var(--t3));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hdr-actions{display:flex;align-items:center;gap:8px}
+  .theme-toggle{font-size:16px;line-height:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text)}
+  .theme-toggle:hover{background:var(--pick-bg)}
+
+  /* ---------- Tab bar ---------- */
+  nav.tabs{
+    flex:0 0 auto;
+    display:flex; gap:5px;
+    padding:9px 16px 11px; border-bottom:1px solid var(--border);
+    background:var(--bg);
+  }
+  .tab{
+    flex:1; font-size:14px; font-weight:600; font-family:inherit;
+    padding:9px 6px; border-radius:9px; border:1px solid var(--border);
+    background:transparent; color:var(--text-soft); cursor:pointer;
+    transition:background .15s, color .15s, border-color .15s;
+    white-space:nowrap;
+  }
+  .tab:hover{background:var(--pick-bg);color:var(--text)}
+  .tab.active{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+
+  /* ---------- Stage (holds frames) ---------- */
+  main.stage{flex:1;min-height:0;position:relative}
+  .frame{position:absolute;inset:0;border:0;display:none}
+  iframe.frame{width:100%;height:100%}
+  .frame.active{display:block}
+  #wPreview.active{display:flex;flex-direction:column}
+  #pSettings.active{display:block;overflow:auto;-webkit-overflow-scrolling:touch}
+
+  /* ---------- Preview wrapper ---------- */
+  .previewbar{
+    flex:0 0 auto;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:10px 16px; border-bottom:1px solid var(--border); background:var(--surface);
+  }
+  .pvlabel{font-size:14px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pvlabel strong{color:var(--text);font-weight:600}
+  #pvRefresh{flex:0 0 auto}
+  .pvbody{flex:1;min-height:0;position:relative}
+  #fPreview{position:absolute;inset:0;width:100%;height:100%;border:0}
+  .pvempty{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 36px;gap:7px}
+  .pvempty .big{font-size:17px;font-weight:600;color:var(--text)}
+  .pvempty .sub{font-size:14px;color:var(--text-soft);max-width:340px}
+  #wPreview.is-empty #fPreview{display:none}
+  #wPreview.is-empty .pvempty{display:flex}
+
+  /* ---------- Settings panel ---------- */
+  .settings-inner{max-width:620px;margin:0 auto;padding:26px 22px 64px}
+  .settings-inner h2{font-size:19px;font-weight:700;margin:0 0 6px}
+  .muted{color:var(--text-soft);font-size:14px;margin:0 0 16px;line-height:1.55}
+  .seg{display:flex;gap:4px;background:var(--pick-bg);padding:4px;border-radius:11px;margin-bottom:14px}
+  .seg-opt{flex:1;font-size:14px;font-weight:600;font-family:inherit;padding:9px;border-radius:8px;border:0;background:transparent;color:var(--text-soft);cursor:pointer}
+  .seg-opt.active{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.10)}
+  #msgBox{width:100%;font-family:inherit;font-size:15px;line-height:1.55;padding:13px 14px;border-radius:12px;border:1px solid var(--border);background:var(--field);color:var(--text);resize:vertical}
+  #msgBox:focus{outline:none;border-color:var(--accent)}
+  #msgBox:disabled{opacity:.5;cursor:not-allowed}
+  .tokens{margin:10px 0 18px;font-size:13px;line-height:1.7}
+  .tokens code{background:var(--pick-bg);padding:1px 6px;border-radius:5px;font-size:12.5px}
+  .preview-card{border:1px solid var(--border);border-radius:13px;overflow:hidden;margin-bottom:20px}
+  .preview-card-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);padding:9px 15px;border-bottom:1px solid var(--border);background:var(--pick-bg)}
+  .msg-preview{padding:15px;font-size:15px;line-height:1.55;white-space:pre-wrap;word-break:break-word;min-height:46px;color:var(--text)}
+  .save-row{display:flex;align-items:center;gap:14px}
+  .btn-primary{font-size:15px;font-weight:600;font-family:inherit;padding:11px 26px;border-radius:11px;border:0;background:var(--accent);color:var(--accent-text);cursor:pointer}
+  .btn-primary:hover{filter:brightness(1.06)}
+  .btn-primary:disabled{opacity:.55;cursor:default}
+  .save-msg{font-size:14px;font-weight:600;color:var(--good)}
+  .save-msg.err{color:var(--err)}
+
+  /* ---------- Footer ---------- */
+  footer.ver{flex:0 0 auto;text-align:center;font-size:12px;color:var(--text-soft);padding:9px 16px;border-top:1px solid var(--border)}
+</style>
+</head>
+<body class="dark">
+
+<header>
+  <div class="brand"><span class="star">&#10022;</span><span class="wm">Magic Reel</span></div>
+  <div class="hdr-actions">
+    <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">&#9728;&#65039;</button>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" id="tabSend"     data-tab="send"     role="tab">Send</button>
+  <button class="tab"        id="tabPreview"  data-tab="preview"  role="tab">Preview</button>
+  <button class="tab"        id="tabDash"     data-tab="dash"     role="tab">Dashboard</button>
+  <button class="tab"        id="tabSettings" data-tab="settings" role="tab">Settings</button>
+</nav>
+
+<main class="stage">
+  <!-- Send: eager (default tab) -->
+  <iframe id="fSend" class="frame active" src="/?embed=1" title="Send" allow="clipboard-write; autoplay; fullscreen; encrypted-media"></iframe>
+
+  <!-- Preview: wrapper with bar + lazy iframe + empty state -->
+  <div id="wPreview" class="frame is-empty">
+    <div class="previewbar">
+      <span class="pvlabel">Latest send: <strong id="pvFilm">&mdash;</strong></span>
+      <button id="pvRefresh" class="theme-toggle" title="Refresh">&#8635; Refresh</button>
+    </div>
+    <div class="pvbody">
+      <iframe id="fPreview" title="Preview" allow="clipboard-write; autoplay; fullscreen; encrypted-media"></iframe>
+      <div class="pvempty" id="pvEmpty">
+        <div class="big">No sends yet</div>
+        <div class="sub">Send a film from the Send tab and it&rsquo;ll appear here &mdash; exactly what your recipients see.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard: lazy -->
+  <iframe id="fDash" class="frame" title="Dashboard" allow="clipboard-write; autoplay; fullscreen; encrypted-media"></iframe>
+
+  <!-- Settings: in-shell panel -->
+  <div id="pSettings" class="frame">
+    <div class="settings-inner">
+      <h2>Email message</h2>
+      <p class="muted">Choose what recipients see in the body of their &ldquo;your footage is ready&rdquo; email. The greeting, the &ldquo;Open your reel&rdquo; button, your signature, and the <em>File:</em> line stay the same &mdash; only this one message changes.</p>
+
+      <div class="seg" role="radiogroup" aria-label="Message mode">
+        <button class="seg-opt active" id="modeDefault" role="radio" aria-checked="true">Default rotating lines</button>
+        <button class="seg-opt"        id="modeCustom"  role="radio" aria-checked="false">My message</button>
+      </div>
+
+      <textarea id="msgBox" rows="4" placeholder="Write the message your recipients will see&hellip;" disabled></textarea>
+
+      <p class="tokens muted">Tokens you can drop in: <code>{title}</code> film title &middot; <code>{name}</code> recipient&rsquo;s first name &middot; <code>{time}</code> their time budget (e.g. 2:00). Plain text only.</p>
+
+      <div class="preview-card">
+        <div class="preview-card-label">Preview</div>
+        <div id="msgPreview" class="msg-preview"></div>
+      </div>
+
+      <div class="save-row">
+        <button id="saveBtn" class="btn-primary">Save</button>
+        <span id="saveMsg" class="save-msg"></span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="ver" id="ver">Magic Reel &middot; v0.10.0 &mdash; &#127916; Studio shell</footer>
+
+<script>
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+
+  /* ---------- Theme (dark default, runtime only) ---------- */
+  var dark = true;
+  var FRAMES = ['fSend','fPreview','fDash'];
+
+  function applyShellTheme(){
+    document.body.classList.toggle('dark', dark);
+    var tb = $('themeBtn'); if(tb) tb.innerHTML = dark ? '&#9728;&#65039;' : '&#127769;';
+    var m = $('themeColorMeta'); if(m) m.setAttribute('content', dark ? '#1a1a1c' : '#faf9f5');
+  }
+  function postThemeTo(frame){
+    if(!frame) return;
+    var src = frame.getAttribute('src');
+    if(!src || src === 'about:blank') return;
+    try{ frame.contentWindow.postMessage({ type:'mr-theme', dark:dark }, location.origin); }catch(e){}
+  }
+  function broadcastTheme(){
+    for(var i=0;i<FRAMES.length;i++) postThemeTo($(FRAMES[i]));
+  }
+  $('themeBtn').addEventListener('click', function(){
+    dark = !dark;
+    applyShellTheme();
+    broadcastTheme();
+  });
+  /* each frame re-syncs theme once it loads (covers lazy + late frames) */
+  for(var fi=0; fi<FRAMES.length; fi++){
+    (function(f){ if(f) f.addEventListener('load', function(){ postThemeTo(f); }); })($(FRAMES[fi]));
+  }
+
+  /* ---------- Tabs ---------- */
+  var TABS = [
+    { tab:'tabSend',     frame:'fSend',     name:'send'     },
+    { tab:'tabPreview',  frame:'wPreview',  name:'preview'  },
+    { tab:'tabDash',     frame:'fDash',     name:'dash'     },
+    { tab:'tabSettings', frame:'pSettings', name:'settings' }
+  ];
+  var dashLoaded = false;
+  var settingsLoaded = false;
+
+  function showTab(name){
+    for(var i=0;i<TABS.length;i++){
+      var t = TABS[i];
+      var on = (t.name === name);
+      $(t.tab).classList.toggle('active', on);
+      $(t.frame).classList.toggle('active', on);
+      $(t.tab).setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    if(name === 'preview') openPreview();
+    if(name === 'dash' && !dashLoaded){ dashLoaded = true; $('fDash').src = '/dashboard?embed=1'; }
+    if(name === 'settings' && !settingsLoaded){ settingsLoaded = true; loadSettings(); }
+  }
+  (function bindTabs(){
+    for(var i=0;i<TABS.length;i++){
+      (function(t){ $(t.tab).addEventListener('click', function(){ showTab(t.name); }); })(TABS[i]);
+    }
+  })();
+
+  /* ---------- Preview ---------- */
+  var pvToken = null;
+  function openPreview(){
+    fetch('/api/latest-preview').then(function(r){ return r.json(); }).then(function(j){
+      if(!j || j.none){
+        $('wPreview').classList.add('is-empty');
+        pvToken = null;
+        $('pvFilm').textContent = '\u2014';
+        return;
+      }
+      $('wPreview').classList.remove('is-empty');
+      $('pvFilm').textContent = j.filmName || 'Untitled';
+      if(j.token && j.token !== pvToken){
+        pvToken = j.token;
+        $('fPreview').src = '/r/' + j.token + '?embed=1';
+      }
+    }).catch(function(){
+      $('wPreview').classList.add('is-empty');
+    });
+  }
+  $('pvRefresh').addEventListener('click', function(){
+    pvToken = null;
+    openPreview();
+  });
+
+  /* ---------- Settings ---------- */
+  var mode = 'default';
+  function setMode(m){
+    mode = m;
+    var isCustom = (m === 'custom');
+    $('modeDefault').classList.toggle('active', !isCustom);
+    $('modeCustom').classList.toggle('active', isCustom);
+    $('modeDefault').setAttribute('aria-checked', isCustom ? 'false' : 'true');
+    $('modeCustom').setAttribute('aria-checked', isCustom ? 'true' : 'false');
+    $('msgBox').disabled = !isCustom;
+    renderMsgPreview();
+  }
+  $('modeDefault').addEventListener('click', function(){ setMode('default'); });
+  $('modeCustom').addEventListener('click', function(){ setMode('custom'); });
+
+  function renderMsgPreview(){
+    var box = $('msgPreview');
+    if(mode !== 'custom'){
+      box.textContent = 'Using the default rotating lines \u2014 each recipient sees a friendly, slightly varied note.';
+      return;
+    }
+    var raw = $('msgBox').value;
+    if(!raw || !raw.trim()){
+      box.textContent = '(Blank \u2014 the default lines will be used.)';
+      return;
+    }
+    box.textContent = raw.split('{title}').join('Boom Guy').split('{name}').join('Eleanor').split('{time}').join('2:00');
+  }
+  $('msgBox').addEventListener('input', renderMsgPreview);
+
+  function loadSettings(){
+    fetch('/api/settings').then(function(r){ return r.json(); }).then(function(j){
+      if(j && typeof j.customMessage === 'string') $('msgBox').value = j.customMessage;
+      setMode(j && j.useCustom ? 'custom' : 'default');
+    }).catch(function(){ setMode('default'); });
+  }
+
+  $('saveBtn').addEventListener('click', function(){
+    var btn = $('saveBtn');
+    var sm = $('saveMsg');
+    btn.disabled = true;
+    sm.className = 'save-msg';
+    sm.textContent = '';
+    fetch('/api/settings', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ customMessage: $('msgBox').value, useCustom: mode === 'custom' })
+    }).then(function(r){ return r.json(); }).then(function(j){
+      btn.disabled = false;
+      if(j && j.ok){
+        sm.className = 'save-msg';
+        sm.textContent = 'Saved';
+      } else {
+        sm.className = 'save-msg err';
+        sm.textContent = (j && j.error) ? j.error : 'Could not save.';
+      }
+      setTimeout(function(){ sm.textContent = ''; }, 2600);
+    }).catch(function(){
+      btn.disabled = false;
+      sm.className = 'save-msg err';
+      sm.textContent = 'Could not save \u2014 try again.';
+    });
+  });
+
+  /* ---------- Init ---------- */
+  applyShellTheme();
+
+  /* footer version (authoritative value from /version) */
+  fetch('/version').then(function(r){ return r.json(); }).then(function(j){
+    var f = $('ver'); if(j && j.version && f) f.textContent = 'Magic Reel \u00b7 ' + j.version;
+  }).catch(function(){});
+</script>
+</body>
+</html>

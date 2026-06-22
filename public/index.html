@@ -252,6 +252,8 @@
   .cpbtn svg{width:13px;height:13px}
   .cpbtn.copied{border-color:var(--good);color:var(--good)}
   .sentlist .sr .nm .emailed{display:inline-block;margin-left:7px;font-size:9.5px;font-weight:600;color:var(--good);border:1px solid var(--good);border-radius:999px;padding:0 6px;vertical-align:middle;letter-spacing:.02em}
+  body.embed header{display:none}
+  body.embed .ver{display:none}
 </style>
 </head>
 <body class="dark">
@@ -352,7 +354,7 @@
     <div id="upPreview" class="up-preview hidden"></div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.23 &mdash; &#9993;&#65039; Titled emails + expiry picker</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.10.0 &mdash; &#127916; Studio shell</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -363,6 +365,16 @@
 <script>
 (function(){
   "use strict";
+  /* Studio shell: embed mode + theme sync from the shell (no-op when opened standalone) */
+  try{ if(new URLSearchParams(location.search).has('embed')) document.body.classList.add('embed'); }catch(e){}
+  window.addEventListener('message',function(e){
+    if(e.origin!==location.origin) return;
+    var d=e.data; if(!d||d.type!=='mr-theme') return;
+    var on=!!d.dark;
+    document.body.classList.toggle('dark',on);
+    var tb=document.getElementById('themeBtn'); if(tb) tb.innerHTML=on?'&#9728;&#65039;':'&#127769;';
+    var m=document.getElementById('themeColorMeta'); if(m) m.setAttribute('content',on?'#1a1a1c':'#faf9f5');
+  });
   var $=function(id){return document.getElementById(id);};
   function fmt(s){s=Math.round(s);var m=Math.floor(s/60),ss=s%60;return m+":"+(ss<10?"0":"")+ss;}
   function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
