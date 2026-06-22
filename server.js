@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.10.4 — 🔤 Smarter titles: split run-together filenames into words';
+const APP_VERSION = 'v0.10.5 — 📊 Clarity pass: expiry/live badges, exact timestamps, 5s send undo';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -420,7 +420,7 @@ app.get('/version', (req, res) => res.json({ version: APP_VERSION }));
 app.get('/api/dashboard', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
   try {
-    const sends = await pool.query('SELECT id, film_name, status, duration, created_at FROM reel_sends ORDER BY created_at DESC');
+    const sends = await pool.query('SELECT id, film_name, status, duration, created_at, expires_at, asset_deleted_at FROM reel_sends ORDER BY created_at DESC');
     const recips = await pool.query('SELECT token, send_id, name, email, budget_seconds, used_seconds, created_at, opened_at, last_cut_at FROM reel_recipients WHERE is_preview IS NOT TRUE ORDER BY created_at ASC');
     const bySend = {};
     recips.rows.forEach(function (r) {
@@ -434,7 +434,7 @@ app.get('/api/dashboard', async (req, res) => {
       sends: sends.rows
         .filter(function (s) { return bySend[s.id]; }) // only sends actually delivered to someone
         .map(function (s) {
-          return { id: s.id, title: s.film_name || 'Untitled', dur: s.duration, status: s.status, createdAt: s.created_at, recipients: bySend[s.id] };
+          return { id: s.id, title: s.film_name || 'Untitled', dur: s.duration, status: s.status, createdAt: s.created_at, expiresAt: s.expires_at, assetDeletedAt: s.asset_deleted_at, recipients: bySend[s.id] };
         })
     });
   } catch (e) {

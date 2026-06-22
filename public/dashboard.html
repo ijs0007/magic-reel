@@ -172,7 +172,7 @@
 
   <div id="detailView" class="hidden"></div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.10.0 &mdash; &#127916; Studio shell</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.10.5 &mdash; &#128202; Clarity pass</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -195,6 +195,9 @@
   function fmt(s){s=Math.max(0,Math.round(s));var m=Math.floor(s/60),ss=s%60;return m+":"+(ss<10?"0":"")+ss;}
   function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   function ago(h){if(h==null)return'';if(h<1)return Math.max(1,Math.round(h*60))+'m ago';if(h<24)return Math.round(h)+'h ago';var d=Math.round(h/24);if(d<7)return d+'d ago';return Math.round(d/7)+'w ago';}
+  function splitCamel(t){t=String(t||'');var out='';for(var i=0;i<t.length;i++){var c=t.charAt(i),p=(i>0?t.charAt(i-1):''),n=(i+1<t.length?t.charAt(i+1):'');var cU=(c>='A'&&c<='Z'),pLow=(p>='a'&&p<='z'),pUp=(p>='A'&&p<='Z'),nLow=(n>='a'&&n<='z');if(i>0&&cU&&(pLow||(pUp&&nLow)))out+=' ';out+=c;}return out;}
+  function fmtAbs(ts){if(!ts)return'';try{var d=new Date(ts);if(isNaN(d.getTime()))return'';return d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});}catch(e){return'';}}
+  function ebadge(send){var base='display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;margin-left:8px;vertical-align:middle;';function pill(txt,extra){return '<span style="'+base+extra+'">'+txt+'</span>';}var neutral='background:var(--pick-bg);color:var(--text-soft)';if(send.assetDeletedAt)return pill('Footage freed',neutral);if(!send.expiresAt)return '';var ms=new Date(send.expiresAt).getTime()-Date.now();if(isNaN(ms))return '';if(ms<=0)return pill('Expired',neutral);var hrs=ms/3600000;if(hrs<=24){var hh=Math.max(1,Math.round(hrs));return pill('Expires in '+hh+'h','background:rgba(224,121,106,.16);color:var(--err)');}var dd=Math.max(1,Math.round(hrs/24));return pill('Expires in '+dd+'d',neutral);}
 
   $('themeBtn').addEventListener('click',function(){var d=document.body.classList.toggle('dark');$('themeBtn').innerHTML=d?'&#9728;&#65039;':'&#127769;';$('themeColorMeta').setAttribute('content',d?'#1a1a1c':'#faf9f5');});
 
@@ -229,8 +232,8 @@
       var row=document.createElement('div');row.className='film';
       row.innerHTML=posterHTML(send,true)+
         '<div class="fmeta">'+
-          '<div class="ft">'+esc(send.title)+'</div>'+
-          '<div class="fs">'+t.total+' '+(t.total===1?'person':'people')+' &middot; sent '+ago(hrsAgo(send.createdAt))+'</div>'+
+          '<div class="ft">'+esc(splitCamel(send.title))+'</div>'+
+          '<div class="fs">'+t.total+' '+(t.total===1?'person':'people')+' &middot; sent '+ago(hrsAgo(send.createdAt))+ebadge(send)+'</div>'+
           '<div class="frow2"><div class="prog"><div class="pf" style="width:'+pct+'%"></div></div><div class="pct">'+t.done+'/'+t.total+' downloaded</div></div>'+
         '</div>'+
         '<div class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>';
@@ -261,7 +264,7 @@
     });
     $('detailView').innerHTML=
       '<button class="back" id="backBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>All sends</button>'+
-      '<div class="dhead">'+posterHTML(send,true)+'<div><div class="dt">'+esc(send.title)+'</div><div class="ds">Sent '+ago(hrsAgo(send.createdAt))+(send.dur?(' &middot; '+fmt(send.dur)+' master'):'')+'</div></div></div>'+
+      '<div class="dhead">'+posterHTML(send,true)+'<div><div class="dt">'+esc(splitCamel(send.title))+'</div><div class="ds">Sent '+ago(hrsAgo(send.createdAt))+' · '+fmtAbs(send.createdAt)+(send.dur?(' &middot; '+fmt(send.dur)+' master'):'')+ebadge(send)+'</div></div></div>'+
       '<div class="dsum"><div class="head"><b>'+t.done+' of '+t.total+'</b> have downloaded their reels.</div>'+statline+
         '<div class="prog"><div class="pf" style="width:'+pct+'%"></div></div></div>'+
       '<div class="seclbl">Recipients</div>'+rows;
@@ -279,9 +282,9 @@
     var chip=st==='done'?'<span class="stat done">Downloaded</span>':(st==='open'?'<span class="stat open">In progress</span>':'<span class="stat">Sent</span>');
     var jOpen=!!r.openedAt, jDown=used>0.05;
     var journey='<div class="journey">'+
-      jstep(true,'Link sent',ago(hrsAgo(r.createdAt)))+
+      jstep(true,'Link sent',ago(hrsAgo(r.createdAt))+' · '+fmtAbs(r.createdAt))+
       jstep(jOpen,'Opened the link',jOpen?ago(hrsAgo(r.openedAt)):'Not yet')+
-      jstep(jDown,'Downloaded a reel',jDown?ago(hrsAgo(r.lastCutAt)):(jOpen?'In progress':'\u2014'))+
+      jstep(jDown,'Downloaded a reel',jDown?(ago(hrsAgo(r.lastCutAt))+' · '+fmtAbs(r.lastCutAt)):(jOpen?'In progress':'\u2014'))+
       '</div>';
     var reel;
     if(jDown){

@@ -357,7 +357,7 @@
     <div id="upPreview" class="up-preview hidden"></div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.10.4 &mdash; &#128290; Smarter titles</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.10.5 &mdash; &#128202; Clarity pass</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -480,7 +480,7 @@
     }catch(e){}
     refresh();
     state.autoRetries=0;
-    startUpload(file);
+    armSend(file);
   }
 
   // --- Milestone 2: real upload to Mux + transcode status ---
@@ -500,6 +500,18 @@
         else { renderUp('Upload stalled \u2014 your connection isn\u2019t responding. Remove the file and try again.','err'); }
       }
     },5000);
+  }
+  // A brief, cancellable window before the upload (and therefore the emails) actually start —
+  // a guard against dropping the wrong file or sending to the wrong people. Cancel resets like remove.
+  function armSend(file){
+    var n=5;
+    renderUp('Sending in <b id="armN">'+n+'</b>… <button type="button" id="armCancel" style="margin-left:10px;font:inherit;font-weight:600;color:var(--accent);background:none;border:0;cursor:pointer;text-decoration:underline">Cancel</button>');
+    var b=$('armCancel'); if(b) b.addEventListener('click',clearFile);
+    state.armTimer=setInterval(function(){
+      n--;
+      if(n<=0){ clearInterval(state.armTimer); state.armTimer=null; startUpload(file); return; }
+      var el=$('armN'); if(el) el.textContent=n;
+    },1000);
   }
   function startUpload(file){
     state.sendId=null; state.playbackId=null;
@@ -547,6 +559,7 @@
     upPreview.classList.remove('hidden');
   }
   function clearFile(){
+    if(state.armTimer){clearInterval(state.armTimer);state.armTimer=null;}
     if(state.uploadXhr){try{state.uploadXhr.abort();}catch(e){}state.uploadXhr=null;}
     clearStallWatch(); state.autoRetries=0; state.sent=false;
     clearTimeout(state.pollTimer); state.sendId=null; state.playbackId=null;
