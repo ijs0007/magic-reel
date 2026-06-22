@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.10.1 — 🎯 True Preview: mirrors the recipient\u2019s real time limit';
+const APP_VERSION = 'v0.10.3 — 👤 Preview mirrors the recipient: name, watermark & time';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -558,26 +558,34 @@ app.get('/api/latest-preview', async (req, res) => {
     if (!s.rows.length) return res.json({ none: true });
     const sendId = s.rows[0].id;
     const filmName = s.rows[0].film_name || 'Untitled';
-    // Mirror the real recipients' budget so Preview reflects what a recipient actually sees.
-    // Use the most generous real-recipient budget; fall back to MAX_CUT_SECONDS only if none exist yet.
-    const bq = await pool.query(
-      'SELECT MAX(budget_seconds) AS b FROM reel_recipients WHERE send_id = $1 AND is_preview IS NOT TRUE',
+    // Mirror a real recipient so Preview shows exactly what went out — their name (drives the
+    // greeting + the "for <name>" watermark) and their time budget. For a multi-recipient send,
+    // take the most generous budget and the most recent recipient at that budget (which person
+    // doesn't matter — it's only a preview of what was sent).
+    const rep = await pool.query(
+      'SELECT name, budget_seconds FROM reel_recipients WHERE send_id = $1 AND is_preview IS NOT TRUE' +
+      ' ORDER BY budget_seconds DESC, created_at DESC LIMIT 1',
       [sendId]);
-    const targetBudget = (bq.rows.length && bq.rows[0].b != null) ? Number(bq.rows[0].b) : MAX_CUT_SECONDS;
-    const ex = await pool.query('SELECT token, budget_seconds FROM reel_recipients WHERE send_id = $1 AND is_preview IS TRUE ORDER BY created_at ASC LIMIT 1', [sendId]);
+    const targetName = rep.rows.length ? (rep.rows[0].name || 'Preview') : 'Preview';
+    const targetBudget = rep.rows.length ? Number(rep.rows[0].budget_seconds) : MAX_CUT_SECONDS;
+    const ex = await pool.query('SELECT token, name, budget_seconds FROM reel_recipients WHERE send_id = $1 AND is_preview IS TRUE ORDER BY created_at ASC LIMIT 1', [sendId]);
     let token;
     if (ex.rows.length) {
       token = ex.rows[0].token;
-      // Keep the preview budget in sync; reset usage only when the budget actually changes, so an
-      // ordinary re-open doesn't wipe in/out marks but a budget correction starts from a clean slate.
-      if (Number(ex.rows[0].budget_seconds) !== targetBudget) {
-        await pool.query('UPDATE reel_recipients SET budget_seconds = $1, used_seconds = 0 WHERE token = $2', [targetBudget, token]);
+      const budgetChanged = Number(ex.rows[0].budget_seconds) !== targetBudget;
+      const nameChanged = (ex.rows[0].name || '') !== targetName;
+      if (budgetChanged) {
+        // Reset usage only when the budget changes, so a faithful re-check starts from a clean
+        // slate; a name-only change leaves any in/out marks intact.
+        await pool.query('UPDATE reel_recipients SET name = $1, budget_seconds = $2, used_seconds = 0 WHERE token = $3', [targetName, targetBudget, token]);
+      } else if (nameChanged) {
+        await pool.query('UPDATE reel_recipients SET name = $1 WHERE token = $2', [targetName, token]);
       }
     } else {
       token = genToken();
       await pool.query(
         'INSERT INTO reel_recipients (token, send_id, name, email, budget_seconds, is_preview) VALUES ($1, $2, $3, $4, $5, true)',
-        [token, sendId, 'Preview', null, targetBudget]);
+        [token, sendId, targetName, null, targetBudget]);
     }
     res.json({ token: token, filmName: filmName, sendId: sendId });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -676,7 +684,7 @@ const MAX_CUT_SECONDS = 600;
 const MAX_RANGES = 25;          // a reel shouldn't need more cuts than this
 const MIN_CLIP_SECONDS = 0.5;   // Mux requires clips of at least 500 ms
 const MAX_ASSETS = 8;           // hard floor: never hold more than this many live master assets (Mux free tier caps at 10; leaves headroom for transient clip-assets)
-const LINK_TTL_DAYS = 14;       // a recipient link (and its master asset) lives this long, then is cleaned up
+const LINK_TTL_DAYS = 3;       // a recipient link (and its master asset) lives this long, then is cleaned up
 const FULLY_DOWNLOADED_GRACE_HOURS = 24; // once EVERY recipient has pulled a cut, shorten the link's life to this so footage doesn't linger the full TTL
 const EXPIRING_SOON_HOURS = 48;          // one-time heads-up email to recipients who haven't used their full budget when their link is within this window of expiry
 const POLL_MS = 2500;
