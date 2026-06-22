@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.22 — ⏱️ Avid controls + expiry clock';
+const APP_VERSION = 'v0.9.23 — ✉️ Titled emails + expiry picker';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -98,29 +98,45 @@ function reelFirstName(name) {
   return n.split(' ')[0] || 'there';
 }
 // One elegant, minimal shell for every recipient email: greeting, one line, button, fine print.
-function emailShell(firstEsc, bodyHtml, link) {
+function emailShell(firstEsc, bodyHtml, link, fileNote) {
+  var foot = fileNote ? ('<p style="color:#c2c2c2;font-size:11px;margin:22px 0 0;">File: ' + fileNote + '</p>') : '';
   return '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.65;max-width:460px;margin:0 auto;padding:12px 0;">' +
     '<p style="font-size:16px;font-weight:600;margin:0 0 16px;">Hi ' + firstEsc + ',</p>' +
-    '<p style="font-size:15px;color:#3a3a3c;margin:0 0 28px;">' + bodyHtml + '</p>' +
-    '<p style="margin:0 0 28px;"><a href="' + link + '" style="background:#7c4dff;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:11px;display:inline-block;">Open your reel</a></p>' +
-    '<p style="color:#a0a0a0;font-size:12.5px;margin:0;">Your private link \u2014 just for you.</p>' +
+    '<p style="font-size:15px;color:#3a3a3c;margin:0 0 26px;">' + bodyHtml + '</p>' +
+    '<p style="margin:0 0 26px;"><a href="' + link + '" style="background:#7c4dff;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:11px;display:inline-block;">Open your reel</a></p>' +
+    '<p style="font-size:14px;color:#3a3a3c;margin:0 0 3px;">All the best,</p>' +
+    '<p style="font-size:14px;color:#1a1a1c;font-weight:600;margin:0 0 22px;">Isaiah Jeremiah</p>' +
+    '<p style="color:#a0a0a0;font-size:12.5px;margin:0;">Your private link — just for you.</p>' +
+    foot +
     '</div>';
 }
 
-async function sendReelEmail(to, name, link, filmName, budgetSeconds) {
+function reelReadyLine(phrase, cap) {
+  var L = [
+    'Your selects from ' + phrase + ' are ready \u2014 grab up to <strong>' + cap + '</strong>.',
+    phrase + ' is cut and waiting \u2014 pick your favorite moments, up to <strong>' + cap + '</strong>.',
+    'Fresh from the edit: ' + phrase + ' \u2014 choose your selects, up to <strong>' + cap + '</strong>.',
+    'Time to pull your moments from ' + phrase + ' \u2014 you have up to <strong>' + cap + '</strong>.',
+    phrase + ' is ready for your eyes \u2014 mark your selects, up to <strong>' + cap + '</strong>.',
+    'Dive into ' + phrase + ' and pick your selects \u2014 up to <strong>' + cap + '</strong>.'
+  ];
+  return L[Math.floor(Math.random() * L.length)];
+}
+async function sendReelEmail(to, name, link, filmName, budgetSeconds, sourceFile) {
   if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
   to = String(to || '').trim();
   if (!(to.indexOf('@') > 0 && to.lastIndexOf('.') > to.indexOf('@') + 1)) return { ok: false, reason: 'no-recipient' };
-  var film = stripExt(filmName);
+  var film = String(filmName || '').trim();
   var named = film && film !== 'Untitled';
   var phrase = named ? '\u201c' + emailEsc(film) + '\u201d' : 'your footage';
   var cap = fmtClock(budgetSeconds);
-  var html = emailShell(emailEsc(reelFirstName(name)), 'Your footage from ' + phrase + ' is ready — pick your selects, up to <strong>' + cap + '</strong>.', link);
+  var subject = 'Magic Reels | ' + (named ? film + ' | ' : '') + 'Choose Your Selects';
+  var html = emailShell(emailEsc(reelFirstName(name)), reelReadyLine(phrase, cap), link, emailEsc(sourceFile || ''));
   try {
     var r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Your reel selects' + (named ? ' \u2014 ' + film : ''), html })
+      body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: subject, html })
     });
     if (!r.ok) { var d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
     return { ok: true };
@@ -131,7 +147,7 @@ async function sendReelNudgeEmail(to, name, link, filmName, budgetSeconds) {
   if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
   to = String(to || '').trim();
   if (!(to.indexOf('@') > 0 && to.lastIndexOf('.') > to.indexOf('@') + 1)) return { ok: false, reason: 'no-recipient' };
-  var film = stripExt(filmName);
+  var film = String(filmName || '').trim();
   var named = film && film !== 'Untitled';
   var phrase = named ? '\u201c' + emailEsc(film) + '\u201d' : 'your footage';
   var cap = fmtClock(budgetSeconds);
@@ -151,7 +167,7 @@ async function sendReelExpiringEmail(to, name, link, filmName, budgetSeconds, ex
   if (!resendConfigured()) return { ok: false, reason: 'not-configured' };
   to = String(to || '').trim();
   if (!(to.indexOf('@') > 0 && to.lastIndexOf('.') > to.indexOf('@') + 1)) return { ok: false, reason: 'no-recipient' };
-  var film = stripExt(filmName);
+  var film = String(filmName || '').trim();
   var named = film && film !== 'Untitled';
   var phrase = named ? '\u201c' + emailEsc(film) + '\u201d' : 'your footage';
   var cap = fmtClock(budgetSeconds);
@@ -289,6 +305,7 @@ async function ensureSchema() {
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ');
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS asset_deleted_at TIMESTAMPTZ');
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS fps DOUBLE PRECISION');
+  await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS source_file TEXT');
   // Backfill expiry for rows that predate the column (LINK_TTL_DAYS is an in-code integer, no injection).
   await pool.query("UPDATE reel_sends SET expires_at = created_at + interval '" + LINK_TTL_DAYS + " days' WHERE expires_at IS NULL");
   await pool.query(
@@ -442,7 +459,8 @@ app.post('/api/uploads', async (req, res) => {
     // Make room before adding another asset: free anything expired, then enforce the floor.
     await cleanupExpiredSends().catch(function () {});
     await enforceAssetFloor().catch(function () {});
-    const filmName = stripExt((req.body && req.body.filmName) || 'Untitled');
+    const filmName = (String((req.body && req.body.filmName) || '').trim()) || 'Untitled';
+    const sourceFile = String((req.body && req.body.sourceFile) || '').trim();
     const signed = signingConfigured();
     const upload = await muxFetch('/video/v1/uploads', {
       method: 'POST',
@@ -454,13 +472,31 @@ app.post('/api/uploads', async (req, res) => {
     });
     const id = crypto.randomUUID();
     await pool.query(
-      'INSERT INTO reel_sends (id, film_name, upload_id, status, playback_signed, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
-      [id, filmName, upload.id, 'uploading', signed, expiryFromNow()]
+      'INSERT INTO reel_sends (id, film_name, source_file, upload_id, status, playback_signed, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, filmName, sourceFile, upload.id, 'uploading', signed, expiryFromNow()]
     );
     res.json({ sendId: id, uploadUrl: upload.url });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Update a send's title + link expiry just before links go out (lets the sender
+// correct the auto-extracted title during the upload/transcode window).
+app.patch('/api/sends/:id', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
+  try {
+    const id = String(req.params.id || '');
+    const b = req.body || {};
+    const sets = []; const vals = []; let n = 1;
+    if (typeof b.title === 'string' && b.title.trim()) { sets.push('film_name = $' + (n++)); vals.push(b.title.trim().slice(0, 200)); }
+    let days = parseInt(b.expiryDays, 10);
+    if (isFinite(days)) { days = Math.max(1, Math.min(90, days)); sets.push('expires_at = $' + (n++)); vals.push(new Date(Date.now() + days * 86400000)); }
+    if (!sets.length) return res.json({ ok: true, updated: 0 });
+    vals.push(id);
+    await pool.query('UPDATE reel_sends SET ' + sets.join(', ') + ' WHERE id = $' + n, vals);
+    res.json({ ok: true, updated: sets.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Most recent upload (used by the recipient page for testing in this milestone).
@@ -815,7 +851,7 @@ app.post('/api/recipients', async (req, res) => {
     let budget = parseInt(b.budgetSeconds, 10);
     if (!isFinite(budget) || budget <= 0) budget = 120;
     budget = Math.min(budget, MAX_CUT_SECONDS);
-    const s = await pool.query('SELECT id, film_name FROM reel_sends WHERE id = $1', [b.sendId]);
+    const s = await pool.query('SELECT id, film_name, source_file FROM reel_sends WHERE id = $1', [b.sendId]);
     if (!s.rows.length) return res.status(404).json({ error: 'No such send.' });
     const token = genToken();
     await pool.query('INSERT INTO reel_recipients (token, send_id, name, email, budget_seconds) VALUES ($1, $2, $3, $4, $5)',
@@ -824,7 +860,7 @@ app.post('/api/recipients', async (req, res) => {
     let emailed = false;
     if (b.notify === true && email && resendConfigured()) {
       const base = reqBase(req);
-      const out = await sendReelEmail(email, name, base + '/r/' + token, s.rows[0].film_name, budget);
+      const out = await sendReelEmail(email, name, base + '/r/' + token, s.rows[0].film_name, budget, s.rows[0].source_file);
       emailed = !!(out && out.ok);
       if (!emailed) console.warn('[reel-email] not sent to', email, '-', out && out.reason, out && out.detail ? ('(' + out.detail + ')') : '');
     }
@@ -840,7 +876,7 @@ app.post('/api/recipients', async (req, res) => {
 // Shared lookup: a recipient joined to their send (name, email, budget, film).
 async function loadRecipient(token) {
   const q = await pool.query(
-    'SELECT rec.token, rec.name, rec.email, rec.budget_seconds, rec.used_seconds, s.film_name' +
+    'SELECT rec.token, rec.name, rec.email, rec.budget_seconds, rec.used_seconds, s.film_name, s.source_file' +
     ' FROM reel_recipients rec JOIN reel_sends s ON s.id = rec.send_id WHERE rec.token = $1',
     [token]);
   return q.rows.length ? q.rows[0] : null;
@@ -854,7 +890,7 @@ app.post('/api/recipients/:token/resend', async (req, res) => {
     if (!r) return res.status(404).json({ error: 'No such recipient.' });
     if (!r.email) return res.status(400).json({ error: 'No email on file for this recipient.' });
     if (!resendConfigured()) return res.json({ ok: false, emailed: false, reason: 'not-configured' });
-    const out = await sendReelEmail(r.email, r.name, reqBase(req) + '/r/' + r.token, r.film_name, r.budget_seconds);
+    const out = await sendReelEmail(r.email, r.name, reqBase(req) + '/r/' + r.token, r.film_name, r.budget_seconds, r.source_file);
     if (!out.ok) console.warn('[reel-resend] not sent to', r.email, '-', out.reason, out.detail ? ('(' + out.detail + ')') : '');
     res.json({ ok: !!out.ok, emailed: !!out.ok, reason: out.reason || null });
   } catch (e) {

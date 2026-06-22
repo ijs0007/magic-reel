@@ -63,6 +63,15 @@
 
   .filecard{display:none;align-items:center;gap:14px;padding:13px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
   .filecard.show{display:flex}
+  .filedeets{display:none;margin-top:12px}
+  .filedeets.show{display:block}
+  .fd-label{display:block;font-size:12px;font-weight:600;color:var(--text);margin:13px 0 5px}
+  .filedeets .fd-label:first-child{margin-top:0}
+  .fd-sub{font-weight:400;color:var(--text-soft)}
+  .fd-input{width:100%;box-sizing:border-box;font-family:inherit;font-size:14.5px;padding:11px 13px;border:1px solid var(--border);border-radius:10px;background:var(--field);color:var(--text)}
+  .fd-input::placeholder{color:var(--text-soft);opacity:.7}
+  .fd-input:focus{outline:none;border-color:var(--accent)}
+  .filedeets select.msm{font-size:14.5px;padding:10px 32px 10px 13px}
   .up-status{margin-top:13px;font-size:13px;color:var(--text-soft);display:flex;align-items:center;gap:11px;flex-wrap:wrap}
   .up-status b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
   .up-status .barwrap{flex:1;height:7px;border-radius:5px;background:var(--pick-bg);overflow:hidden;min-width:120px;max-width:240px}
@@ -333,11 +342,17 @@
       <div class="fileinfo"><div class="name" id="fname">&mdash;</div><div class="meta" id="fmeta">&mdash;</div></div>
       <button class="xbtn" id="fremove" aria-label="Remove file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>
+    <div class="filedeets" id="filedeets">
+      <label class="fd-label" for="filmTitle">Title <span class="fd-sub">&mdash; shown in the email subject</span></label>
+      <input class="fd-input" id="filmTitle" type="text" placeholder="Film title" autocomplete="off" spellcheck="false">
+      <label class="fd-label" for="expirySel">Link expires</label>
+      <select class="msm" id="expirySel"><option value="3">In 3 days</option><option value="7">In 1 week</option><option value="14" selected>In 2 weeks</option><option value="30">In 30 days</option></select>
+    </div>
     <div id="upStatus" class="up-status hidden"></div>
     <div id="upPreview" class="up-preview hidden"></div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.22 &mdash; &#9201;&#65039; Avid controls + expiry clock</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.23 &mdash; &#9993;&#65039; Titled emails + expiry picker</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -409,14 +424,25 @@
   function fmtSize(b){if(!b)return'';var u=['B','KB','MB','GB'];var i=Math.floor(Math.log(b)/Math.log(1024));return (b/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];}
   function fmtDur(s){if(!isFinite(s)||!s)return'';s=Math.round(s);var m=Math.floor(s/60),ss=s%60;return m+':'+(ss<10?'0':'')+ss;}
   var drop=$('drop'),filein=$('filein'),filecard=$('filecard'),thumb=$('thumb'),fname=$('fname'),fmeta=$('fmeta');
+  function cleanTitle(name){
+    var s=String(name||''); var dot=s.lastIndexOf('.'); if(dot>0) s=s.slice(0,dot);
+    var raw=s.split('_').join(' ').split('-').join(' ').split('.').join(' ');
+    var toks=raw.split(' ').filter(function(x){return x;});
+    var meta={final:1,draft:1,original:1,export:1,render:1,copy:1,youtube:1,socials:1,social:1,ig:1,fb:1,tiktok:1,proxy:1,h264:1,prores:1,master:1};
+    function allDigits(t){ for(var i=0;i<t.length;i++){var c=t.charAt(i); if(c<'0'||c>'9') return false;} return t.length>0; }
+    function isMeta(t){ var l=t.toLowerCase(); if(meta[l]) return true; if(l.charAt(0)==='v' && l.length>1 && allDigits(l.slice(1))) return true; if(l.length>=6 && allDigits(l)) return true; return false; }
+    var out=[]; for(var k=0;k<toks.length;k++){ if(isMeta(toks[k])) break; out.push(toks[k]); }
+    var title=(out.length?out:toks).join(' ').trim();
+    return title || 'Untitled';
+  }
   function handleFile(file){
     if(!file)return;
     if(state.recipients.length===0){ nudgeRecipients(); return; }
     state.sent=false;
     state.file={name:file.name,size:file.size,duration:0};
-    fname.textContent=file.name.replace(/[.](mov|mp4|m4v|avi|mkv|webm|mpg|mpeg|wmv|flv|mts|m2ts|prores)$/i,''); fmeta.textContent=fmtSize(file.size);
+    fname.textContent=file.name.replace(/[.](mov|mp4|m4v|avi|mkv|webm|mpg|mpeg|wmv|flv|mts|m2ts|prores)$/i,''); fmeta.textContent=fmtSize(file.size); $('filmTitle').value=cleanTitle(file.name);
     thumb.innerHTML='<span class="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>';
-    filecard.classList.add('show'); drop.style.display='none';
+    filecard.classList.add('show'); $('filedeets').classList.add('show'); drop.style.display='none';
     try{
       var url=URL.createObjectURL(file),v=document.createElement('video');
       v.preload='metadata';v.muted=true;v.src=url;
@@ -451,7 +477,7 @@
     state.sendId=null; state.playbackId=null;
     upPreview.classList.add('hidden'); upPreview.innerHTML='';
     renderUp('Preparing upload\u2026');
-    fetch('/api/uploads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filmName:file.name})})
+    fetch('/api/uploads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filmName:($('filmTitle').value||'').trim()||file.name, sourceFile:file.name})})
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
       .then(function(res){
         if(!res.ok){ renderUp('Couldn\u2019t start the upload: '+(res.j.error||'error'),'err'); return; }
@@ -497,7 +523,7 @@
     clearStallWatch(); state.autoRetries=0; state.sent=false;
     clearTimeout(state.pollTimer); state.sendId=null; state.playbackId=null;
     upStatus.classList.add('hidden'); upStatus.innerHTML=''; upPreview.classList.add('hidden'); upPreview.innerHTML='';
-    state.file=null;filecard.classList.remove('show');drop.style.display='';filein.value='';refresh();
+    state.file=null;filecard.classList.remove('show');$('filedeets').classList.remove('show');drop.style.display='';filein.value='';refresh();
   }
   drop.addEventListener('click',function(){ if(state.recipients.length===0){nudgeRecipients();return;} filein.click(); });
   drop.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault(); if(state.recipients.length===0){nudgeRecipients();return;} filein.click();}});
@@ -743,7 +769,7 @@
     if(state.sent) return; state.sent=true;
     var recs=state.recipients.slice(), sendId=state.sendId, results=[], errors=[];
     processScrim.classList.add('show'); renderMinting();
-    var chain=Promise.resolve();
+    var chain=Promise.resolve().then(function(){ return fetch('/api/sends/'+sendId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:($('filmTitle').value||'').trim(),expiryDays:parseInt($('expirySel').value,10)})}).catch(function(){}); });
     recs.forEach(function(rec){ chain=chain.then(function(){
       return fetch('/api/recipients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sendId:sendId,name:rec.name,email:rec.email,budgetSeconds:effCap(rec),notify:true})})
         .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
