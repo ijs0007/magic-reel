@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.10.5 — 📊 Clarity pass: expiry/live badges, exact timestamps, 5s send undo';
+const APP_VERSION = 'v0.10.6 — 📬 Delivery status: delivered / bounced / not-opened per recipient';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -158,7 +158,8 @@ async function sendReelEmail(to, name, link, filmName, budgetSeconds, sourceFile
       body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: subject, html })
     });
     if (!r.ok) { var d = await r.text().catch(function () { return ''; }); return { ok: false, reason: 'resend-' + r.status, detail: String(d).slice(0, 200) }; }
-    return { ok: true };
+    var jr = await r.json().catch(function () { return {}; });
+    return { ok: true, id: jr && jr.id ? jr.id : null };
   } catch (e) { return { ok: false, reason: 'exception', detail: e.message }; }
 }
 
@@ -254,7 +255,7 @@ function isAuthed(req) { return !DASHBOARD_PASSWORD || parseCookies(req)[AUTH_CO
 function gate(req, res, next) {
   if (!DASHBOARD_PASSWORD) return next();
   const p = req.path;
-  if (p === '/login' || p === '/api/login' || p === '/logout' || p === '/health' || p === '/version') return next();
+  if (p === '/login' || p === '/api/login' || p === '/logout' || p === '/health' || p === '/version' || p === '/api/resend-webhook') return next();
   if (p.indexOf('/r/') === 0 || p.indexOf('/api/r/') === 0 || p.indexOf('/api/cuts/') === 0) return next();
   if (/\.(css|js|mjs|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|otf|map)$/i.test(p)) return next();
   if (isAuthed(req)) return next();
@@ -325,6 +326,8 @@ async function ensureSchema() {
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS asset_deleted_at TIMESTAMPTZ');
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS fps DOUBLE PRECISION');
   await pool.query('ALTER TABLE reel_sends ADD COLUMN IF NOT EXISTS source_file TEXT');
+  await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS email_id TEXT');
+  await pool.query('ALTER TABLE reel_recipients ADD COLUMN IF NOT EXISTS delivery_status TEXT');
   // Backfill expiry for rows that predate the column (LINK_TTL_DAYS is an in-code integer, no injection).
   await pool.query("UPDATE reel_sends SET expires_at = created_at + interval '" + LINK_TTL_DAYS + " days' WHERE expires_at IS NULL");
   await pool.query(
@@ -364,7 +367,41 @@ function publicSend(r) {
   );
 }
 
-app.use(express.json());
+app.use(express.json({ verify: function (req, res, buf) { req.rawBody = buf; } }));
+
+// --- Resend delivery webhook (Svix-signed). Maps email events back to recipients. ---
+function verifyResendWebhook(req) {
+  var secret = process.env.RESEND_WEBHOOK_SECRET || '';
+  if (!secret) return { ok: false, reason: 'no-secret' };
+  var id = req.headers['svix-id'], ts = req.headers['svix-timestamp'], sigHeader = req.headers['svix-signature'];
+  if (!id || !ts || !sigHeader || !req.rawBody) return { ok: false, reason: 'missing' };
+  var raw = secret.indexOf('whsec_') === 0 ? secret.slice(6) : secret;
+  var key = Buffer.from(raw, 'base64');
+  var signed = id + '.' + ts + '.' + req.rawBody.toString('utf8');
+  var expected = crypto.createHmac('sha256', key).update(signed).digest('base64');
+  var parts = String(sigHeader).split(' ');
+  for (var i = 0; i < parts.length; i++) {
+    var seg = parts[i].split(','); var sig = seg.length > 1 ? seg[1] : seg[0];
+    try { if (sig && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return { ok: true }; } catch (e) {}
+  }
+  return { ok: false, reason: 'mismatch' };
+}
+app.post('/api/resend-webhook', async function (req, res) {
+  var v = verifyResendWebhook(req);
+  if (!v.ok) return res.status(v.reason === 'no-secret' ? 503 : 401).end();
+  try {
+    var ev = req.body || {};
+    var emailId = ev.data && ev.data.email_id;
+    var map = { 'email.delivered': 'delivered', 'email.bounced': 'bounced', 'email.complained': 'complained', 'email.delivery_delayed': 'delayed' };
+    var st = map[ev.type || ''];
+    if (st && emailId && pool) {
+      // bounced / complained are terminal — a later 'delivered'/'delayed' must not overwrite them.
+      await pool.query("UPDATE reel_recipients SET delivery_status = $1 WHERE email_id = $2 AND (delivery_status IS NULL OR delivery_status NOT IN ('bounced','complained'))", [st, emailId]);
+    }
+  } catch (e) {}
+  res.status(200).end(); // always 200 so Resend stops retrying
+});
+
 app.use(gate);
 app.use(express.static(path.join(__dirname, 'public'), { setHeaders: function(res, fp){ if(String(fp).toLowerCase().endsWith('.html')) res.set('Cache-Control','no-store, max-age=0'); } }));
 
@@ -421,13 +458,13 @@ app.get('/api/dashboard', async (req, res) => {
   if (!pool) return res.status(503).json({ error: 'Database is not configured yet.' });
   try {
     const sends = await pool.query('SELECT id, film_name, status, duration, created_at, expires_at, asset_deleted_at FROM reel_sends ORDER BY created_at DESC');
-    const recips = await pool.query('SELECT token, send_id, name, email, budget_seconds, used_seconds, created_at, opened_at, last_cut_at FROM reel_recipients WHERE is_preview IS NOT TRUE ORDER BY created_at ASC');
+    const recips = await pool.query('SELECT token, send_id, name, email, budget_seconds, used_seconds, created_at, opened_at, last_cut_at, delivery_status FROM reel_recipients WHERE is_preview IS NOT TRUE ORDER BY created_at ASC');
     const bySend = {};
     recips.rows.forEach(function (r) {
       (bySend[r.send_id] = bySend[r.send_id] || []).push({
         token: r.token, name: r.name, email: r.email,
         cap: r.budget_seconds, used: Number(r.used_seconds) || 0,
-        createdAt: r.created_at, openedAt: r.opened_at, lastCutAt: r.last_cut_at
+        createdAt: r.created_at, openedAt: r.opened_at, lastCutAt: r.last_cut_at, deliveryStatus: r.delivery_status
       });
     });
     res.json({
@@ -962,6 +999,7 @@ app.post('/api/recipients', async (req, res) => {
       const base = reqBase(req);
       const out = await sendReelEmail(email, name, base + '/r/' + token, s.rows[0].film_name, budget, s.rows[0].source_file);
       emailed = !!(out && out.ok);
+      if (emailed && out.id) { try { await pool.query('UPDATE reel_recipients SET email_id = $1, delivery_status = $2 WHERE token = $3', [out.id, 'sent', token]); } catch (e) {} }
       if (!emailed) console.warn('[reel-email] not sent to', email, '-', out && out.reason, out && out.detail ? ('(' + out.detail + ')') : '');
     }
     res.json({ token: token, link: '/r/' + token, name: name, email: email, budgetSeconds: budget, emailed: emailed });
@@ -991,6 +1029,7 @@ app.post('/api/recipients/:token/resend', async (req, res) => {
     if (!r.email) return res.status(400).json({ error: 'No email on file for this recipient.' });
     if (!resendConfigured()) return res.json({ ok: false, emailed: false, reason: 'not-configured' });
     const out = await sendReelEmail(r.email, r.name, reqBase(req) + '/r/' + r.token, r.film_name, r.budget_seconds, r.source_file);
+    if (out.ok && out.id) { try { await pool.query('UPDATE reel_recipients SET email_id = $1, delivery_status = $2 WHERE token = $3', [out.id, 'sent', r.token]); } catch (e) {} }
     if (!out.ok) console.warn('[reel-resend] not sent to', r.email, '-', out.reason, out.detail ? ('(' + out.detail + ')') : '');
     res.json({ ok: !!out.ok, emailed: !!out.ok, reason: out.reason || null });
   } catch (e) {

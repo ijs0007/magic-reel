@@ -172,7 +172,7 @@
 
   <div id="detailView" class="hidden"></div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.10.5 &mdash; &#128202; Clarity pass</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.10.6 &mdash; &#128236; Delivery status</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -198,6 +198,7 @@
   function splitCamel(t){t=String(t||'');var out='';for(var i=0;i<t.length;i++){var c=t.charAt(i),p=(i>0?t.charAt(i-1):''),n=(i+1<t.length?t.charAt(i+1):'');var cU=(c>='A'&&c<='Z'),pLow=(p>='a'&&p<='z'),pUp=(p>='A'&&p<='Z'),nLow=(n>='a'&&n<='z');if(i>0&&cU&&(pLow||(pUp&&nLow)))out+=' ';out+=c;}return out;}
   function fmtAbs(ts){if(!ts)return'';try{var d=new Date(ts);if(isNaN(d.getTime()))return'';return d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});}catch(e){return'';}}
   function ebadge(send){var base='display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;margin-left:8px;vertical-align:middle;';function pill(txt,extra){return '<span style="'+base+extra+'">'+txt+'</span>';}var neutral='background:var(--pick-bg);color:var(--text-soft)';if(send.assetDeletedAt)return pill('Mux asset deleted',neutral);if(!send.expiresAt)return '';var ms=new Date(send.expiresAt).getTime()-Date.now();if(isNaN(ms))return '';if(ms<=0)return pill('Expired',neutral);var hrs=ms/3600000;if(hrs<=24){var hh=Math.max(1,Math.round(hrs));return pill('Expires in '+hh+'h','background:rgba(224,121,106,.16);color:var(--err)');}var dd=Math.max(1,Math.round(hrs/24));return pill('Expires in '+dd+'d',neutral);}
+  function sentChip(r){var d=r.deliveryStatus;var bad='background:rgba(224,121,106,.16);color:var(--err)';if(d==='bounced')return '<span class="stat" style="'+bad+'">Bounced</span>';if(d==='complained')return '<span class="stat" style="'+bad+'">Spam</span>';return '<span class="stat">Sent</span>';}
 
   $('themeBtn').addEventListener('click',function(){var d=document.body.classList.toggle('dark');$('themeBtn').innerHTML=d?'&#9728;&#65039;':'&#127769;';$('themeColorMeta').setAttribute('content',d?'#1a1a1c':'#faf9f5');});
 
@@ -247,7 +248,12 @@
     var st=statusOf(r);
     if(st==='done')return fmt(usedOf(r))+' of '+fmt(r.cap)+' used'+(r.lastCutAt?(' \u00b7 '+ago(hrsAgo(r.lastCutAt))):'');
     if(st==='open')return 'Opened '+ago(hrsAgo(r.openedAt))+' \u00b7 no download yet';
-    return 'Sent '+ago(hrsAgo(r.createdAt))+' \u00b7 not opened yet';
+    var dv=r.deliveryStatus;
+    if(dv==='bounced')return 'Bounced — bad address';
+    if(dv==='complained')return 'Marked as spam';
+    if(dv==='delivered')return 'Delivered · not opened yet';
+    if(dv==='delayed')return 'Sent '+ago(hrsAgo(r.createdAt))+' · delivery delayed';
+    return 'Sent '+ago(hrsAgo(r.createdAt))+' · not opened yet';
   }
   function openDetail(sendId){
     var send=SENDS.filter(function(s){return s.id===sendId;})[0];if(!send)return;
@@ -259,7 +265,7 @@
     statline+='</div>';
     var rows='';
     send.recipients.forEach(function(r,i){
-      var st=statusOf(r),chip=st==='done'?'<span class="stat done">Downloaded</span>':(st==='open'?'<span class="stat open">In progress</span>':'<span class="stat">Sent</span>');
+      var st=statusOf(r),chip=st==='done'?'<span class="stat done">Downloaded</span>':(st==='open'?'<span class="stat open">In progress</span>':sentChip(r));
       rows+='<div class="rrow" data-i="'+i+'"><div class="ava" style="background:'+avaColor(r.token)+'">'+initials(r.name)+'</div><div class="rmeta"><div class="rn">'+esc(r.name)+'</div><div class="rd">'+rowDetail(r)+'</div></div>'+chip+'</div>';
     });
     $('detailView').innerHTML=
@@ -279,7 +285,7 @@
   var CAP_OPTS=[30,60,90,120,150,180,240,300];
   function openRecipient(send,i){
     var r=send.recipients[i],st=statusOf(r),used=usedOf(r);
-    var chip=st==='done'?'<span class="stat done">Downloaded</span>':(st==='open'?'<span class="stat open">In progress</span>':'<span class="stat">Sent</span>');
+    var chip=st==='done'?'<span class="stat done">Downloaded</span>':(st==='open'?'<span class="stat open">In progress</span>':sentChip(r));
     var jOpen=!!r.openedAt, jDown=used>0.05;
     var journey='<div class="journey">'+
       jstep(true,'Link sent',ago(hrsAgo(r.createdAt))+' · '+fmtAbs(r.createdAt))+
@@ -292,8 +298,15 @@
       reel='<div class="usedline"><span class="u">'+fmt(used)+' downloaded</span><span class="c">of '+fmt(r.cap)+'</span></div>'+
            '<div class="meter"><div class="fill" style="width:'+Math.min(100,used/r.cap*100)+'%"></div></div>'+
            '<p class="muted">'+(remain<=0.05?'Fully used \u2014 this link can\u2019t download any more.':fmt(remain)+' left on this link.')+'</p>';
+    } else if(jOpen){
+      reel='<p class="muted">Opened the link but hasn&rsquo;t downloaded anything yet.</p>';
     } else {
-      reel='<p class="muted">'+(jOpen?'Opened the link but hasn&rsquo;t downloaded anything yet.':'Hasn&rsquo;t opened the link yet.')+'</p>';
+      var dv=r.deliveryStatus;
+      if(dv==='bounced') reel='<p class="muted" style="color:var(--err)">The email bounced — this address is bad, so the link never arrived. Fix the address and resend.</p>';
+      else if(dv==='complained') reel='<p class="muted" style="color:var(--err)">Marked as spam by the recipient — the link may be sitting in their spam folder.</p>';
+      else if(dv==='delivered') reel='<p class="muted">Delivered, but hasn&rsquo;t opened the link yet.</p>';
+      else if(dv==='delayed') reel='<p class="muted">Delivery is delayed — the provider is still trying to reach this address.</p>';
+      else reel='<p class="muted">Hasn&rsquo;t opened the link yet.</p>';
     }
     var link=location.origin+'/r/'+r.token;
     var hasEmail=!!(r.email&&r.email.trim());
