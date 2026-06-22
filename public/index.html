@@ -504,7 +504,7 @@
   // A brief, cancellable window before the upload (and therefore the emails) actually start —
   // a guard against dropping the wrong file or sending to the wrong people. Cancel resets like remove.
   function armSend(file){
-    var n=5;
+    var n=12;
     renderUp('Sending in <b id="armN">'+n+'</b>… <button type="button" id="armCancel" style="margin-left:10px;font:inherit;font-weight:600;color:var(--accent);background:none;border:0;cursor:pointer;text-decoration:underline">Cancel</button>');
     var b=$('armCancel'); if(b) b.addEventListener('click',clearFile);
     state.armTimer=setInterval(function(){
