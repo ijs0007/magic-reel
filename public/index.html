@@ -33,6 +33,12 @@
   .brand .wm{background:linear-gradient(92deg,var(--t1),var(--t2) 55%,var(--t3));-webkit-background-clip:text;background-clip:text;color:transparent}
   .theme-toggle{font-size:16px;line-height:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text)}
   .theme-toggle:hover{background:var(--pick-bg)}
+  .hdr-actions{display:flex;align-items:center;gap:8px}
+  #helpBtn{font-weight:700;font-size:15px}
+  .howto{text-align:left;font-size:13.5px;color:var(--text-soft);line-height:1.6;margin:16px 0 4px}
+  .howto p{margin:0 0 11px}
+  .howto p:last-child{margin-bottom:0}
+  .howto b{color:var(--text);font-weight:600}
 
   h1.title{font-size:22px;font-weight:600;margin:2px 0 5px}
   p.sub{color:var(--text-soft);font-size:14.5px;margin:0 0 20px}
@@ -244,7 +250,10 @@
 <div class="wrap">
   <header>
     <div class="brand"><span class="star">&#10022;</span><span class="wm">Magic Reel</span></div>
-    <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">&#9728;&#65039;</button>
+    <div class="hdr-actions">
+      <button class="theme-toggle" id="helpBtn" aria-label="How this works" title="How this works">?</button>
+      <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">&#9728;&#65039;</button>
+    </div>
   </header>
 
   <h1 class="title">Send selects</h1>
@@ -328,11 +337,12 @@
     <div id="upPreview" class="up-preview hidden"></div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.16 &mdash; &#127919; Drop-to-send</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.22 &mdash; &#9201;&#65039; Avid controls + expiry clock</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
 <div class="scrim" id="processScrim"><div class="modal" id="processModal"></div></div>
+<div class="scrim" id="helpScrim"><div class="modal" id="helpModal"><h3>How this works</h3><div class="howto"><p><b>1 &middot; Add who gets it.</b> Enter each person's name and email at the top, and set how much footage each one can pull.</p><p><b>2 &middot; Drop your film.</b> Drag the video onto the drop zone at the bottom (or click to choose it).</p><p><b>3 &middot; Walk away.</b> Magic Reel uploads, prepares a private preview, and emails everyone their own link &mdash; you can close the tab once it says it's done.</p><p><b>They get</b> a private page to scrub the footage, mark the parts they want, and download a clean cut &mdash; capped at the limit you set.</p></div><button class="modalbtn" id="helpClose">Got it</button></div></div>
 <div class="scrim" id="profileScrim"><div class="sheet" id="profileSheet"></div></div>
 
 <script>
@@ -348,6 +358,7 @@
     $('themeBtn').innerHTML=d?'&#9728;&#65039;':'&#127769;';
     $('themeColorMeta').setAttribute('content',d?'#1a1a1c':'#faf9f5');
   });
+  (function(){ var hs=$('helpScrim'); if(!hs)return; function openH(){hs.classList.add('show');} function closeH(){hs.classList.remove('show');} var hb=$('helpBtn'); if(hb)hb.addEventListener('click',openH); var hc=$('helpClose'); if(hc)hc.addEventListener('click',closeH); hs.addEventListener('click',function(e){ if(e.target===hs) closeH(); }); })();
 
   /* mock data */
   var AVA=['#7c4dff','#e0667b','#36b1a1','#c98a3a','#5b8def','#3aa6d6','#d06fa8','#6aa84f'];
@@ -403,7 +414,7 @@
     if(state.recipients.length===0){ nudgeRecipients(); return; }
     state.sent=false;
     state.file={name:file.name,size:file.size,duration:0};
-    fname.textContent=file.name; fmeta.textContent=fmtSize(file.size);
+    fname.textContent=file.name.replace(/[.](mov|mp4|m4v|avi|mkv|webm|mpg|mpeg|wmv|flv|mts|m2ts|prores)$/i,''); fmeta.textContent=fmtSize(file.size);
     thumb.innerHTML='<span class="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>';
     filecard.classList.add('show'); drop.style.display='none';
     try{

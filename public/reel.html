@@ -41,6 +41,8 @@
   .greet .gt b{font-weight:600}
   .greet .gs{font-size:12px;color:var(--text-soft);margin-top:2px}
   .greet .gs b{color:var(--text)}
+  .greet .gx{font-size:11.5px;color:var(--text-soft);margin-top:5px;display:none;align-items:center;gap:5px}
+  .greet .gx svg{width:12px;height:12px;flex:0 0 auto;opacity:.85}
 
   .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
   .pad{padding:16px 18px}
@@ -52,6 +54,7 @@
   .stagemsg .sm-in{max-width:300px;line-height:1.5;color:#cfcfcf;font-size:13.5px}
   .stagemsg .spin2{width:18px;height:18px;border:2px solid rgba(255,255,255,.4);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 11px}
   .wm{position:absolute;inset:0;pointer-events:none}
+  .wm svg{position:absolute;inset:0;width:100%;height:100%;display:block}
   .pbig{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.18);cursor:pointer;transition:opacity .2s}
   .pbig.hide{opacity:0;pointer-events:none}
   .pbig .circ{width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.94);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.3)}
@@ -174,11 +177,9 @@
     #deck .deckhead{justify-content:space-between;margin-bottom:9px}
     #deck .dk-budget{display:inline}
     /* nudge -> one segmented pill */
-    #deck .kcaps{gap:0;max-width:300px;margin:0 auto}
-    #tFrameBack,#tFrameFwd{flex:1 1 0;min-width:0;max-width:none;padding:12px 4px}
-    #tFrameBack .kl,#tFrameFwd .kl{display:none}
-    #tFrameBack{border-radius:11px 0 0 11px;border-right:none}
-    #tFrameFwd{border-radius:0 11px 11px 0}
+    #deck .kcaps{width:100%;max-width:300px;margin:0 auto}
+    #tFrameBack,#tFrameFwd{flex:1 1 0;min-width:0;padding:12px 4px}
+    #tFrameBack{border-left:none}
     /* mark in/out + add -> one segmented pill */
     .markrow{gap:0}
     .markrow .mr-l,.markrow .mr-r{display:contents}
@@ -197,18 +198,17 @@
   .deck .dk-tc b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
   .deck .dk-speed{font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:.02em}
   .deck .dk-budget{font-variant-numeric:tabular-nums}
-  .kcaps{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
-  .kcap{flex:1 1 0;min-width:42px;max-width:66px;border:1px solid var(--border);background:var(--field);border-radius:10px;cursor:pointer;color:var(--text);padding:9px 4px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:transform .08s,background .12s,border-color .12s,box-shadow .12s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
-  .kcap.wide{flex:1.4 1 0;max-width:86px}
-  .kcap:hover{border-color:var(--accent)}
-  .kcap:active{transform:translateY(1px)}
-  .kcap svg{width:20px;height:20px;display:block}
-  .kcap .kl{font-size:9.5px;font-weight:600;color:var(--text-soft)}
-  .kcap.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
-  .kcap.on .kl{color:var(--accent)}
-  .kcap.active{background:var(--accent);border-color:var(--accent);color:var(--accent-text);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent)}
-  .kcap.active .kl{color:var(--accent-text)}
-  .deckhint{font-size:11px;color:var(--text-soft);text-align:center;margin:12px 0 0;line-height:1.6}
+  .kcaps{display:flex;gap:0;justify-content:center;flex-wrap:nowrap;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--field);width:fit-content;max-width:100%;margin:0 auto}
+  .kcap{flex:0 0 auto;border:none;border-radius:0;background:transparent;cursor:pointer;color:var(--text);padding:11px 15px;display:flex;align-items:center;justify-content:center;transition:background .12s,color .12s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  .kcap + .kcap{border-left:1px solid var(--border)}
+  .kcap.wide{padding:11px 19px}
+  .kcap:hover{background:var(--pick-bg);color:var(--accent)}
+  .kcap:active{background:var(--pick-bg)}
+  .kcap svg{width:21px;height:21px;display:block}
+  .kcap .kl{display:none}
+  .kcap.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+  .kcap.active{background:var(--accent);color:var(--accent-text)}
+  .deckhint{display:none}
   .deckhint b{color:var(--text);font-weight:600}
   @media (max-width:540px){ .deckhint{display:none} }
 
@@ -241,6 +241,7 @@
   .howto p{margin:0 0 11px}
   .howto p:last-child{margin-bottom:0}
   .howto b{color:var(--text);font-weight:600}
+  .howto .kbd{margin-top:13px;padding-top:11px;border-top:1px solid var(--border);font-size:12px}
 
   @media (max-width:540px){.wrap{padding:0 16px} .marks .mbtn{min-width:0} .dl{padding:12px 18px;font-size:14.5px}}
   @media (prefers-reduced-motion:reduce){*{animation-duration:.001s !important;transition-duration:.001s !important}}
@@ -262,6 +263,7 @@
     <div>
       <div class="gt">Hi <b id="grName">Eleanor</b> &mdash; footage from <b id="grSender">Isaiah Smith</b>.</div>
       <div class="gs"><b id="grFilm">The Lighthouse Keeper</b> &middot; up to <b id="grCap">2:00</b></div>
+      <div class="gx" id="expiry"></div>
     </div>
   </div>
 
@@ -314,8 +316,8 @@
 
     <div class="markrow">
       <button class="mbtn2 fitm" id="fitBtn" title="Use my remaining time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/></svg></button>
-      <button class="mbtn2" id="markInBtn" title="Mark In (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5"/><path d="M16 4l4 8-4 8"/></svg><span class="lt" id="inLt">&mdash;</span></button>
-      <button class="mbtn2" id="markOutBtn" title="Mark Out (O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/><path d="M8 4L4 12l4 8"/></svg><span class="lt" id="outLt">&mdash;</span></button>
+      <button class="mbtn2" id="markInBtn" title="Mark In (I)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16"/><path d="M7 4h4"/><path d="M7 20h4"/><path d="M12 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></svg><span class="lt" id="inLt">&mdash;</span></button>
+      <button class="mbtn2" id="markOutBtn" title="Mark Out (O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17 4v16"/><path d="M17 4h-4"/><path d="M17 20h-4"/><path d="M12 8.5l-6 3.5 6 3.5z" fill="currentColor" stroke="none"/></svg><span class="lt" id="outLt">&mdash;</span></button>
       <button class="mbtn2 addm" id="addBtn" disabled title="Add clip (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
     </div>
     <div class="candidate" id="cand">Mark an In point to start a clip.</div>
@@ -334,7 +336,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.21 &mdash; &#10067; Help + aligned header</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.22 &mdash; &#9201;&#65039; Avid controls + expiry clock</footer>
 </div>
 
 <div class="bar">
@@ -345,12 +347,12 @@
 </div>
 
 <div class="scrim" id="dlScrim"><div class="modal" id="dlModal"></div></div>
-<div class="scrim" id="helpScrim"><div class="modal" id="helpModal"><h3>How this works</h3><div class="howto"><p><b>1 &middot; Find a moment.</b> Drag the video or the timeline bar to scrub. Tap to play or pause.</p><p><b>2 &middot; Mark it.</b> Hit <b>In</b> where the clip starts, scrub forward, then <b>Out</b> where it ends.</p><p><b>3 &middot; Add it.</b> Press <b>+</b> to add the clip to your reel &mdash; repeat up to your time limit.</p><p><b>4 &middot; Download.</b> Tap <b>Download reel</b> for a clean, watermark-free cut.</p></div><button class="modalbtn" id="helpClose">Got it</button></div></div>
+<div class="scrim" id="helpScrim"><div class="modal" id="helpModal"><h3>How this works</h3><div class="howto"><p><b>1 &middot; Find a moment.</b> Drag the video or the timeline bar to scrub. Tap to play or pause.</p><p><b>2 &middot; Mark it.</b> Hit <b>In</b> where the clip starts, scrub forward, then <b>Out</b> where it ends.</p><p><b>3 &middot; Add it.</b> Press <b>+</b> to add the clip to your reel &mdash; repeat up to your time limit.</p><p><b>4 &middot; Download.</b> Tap <b>Download reel</b> for a clean, watermark-free cut.</p><p class="kbd"><b>Keyboard</b> &middot; Space play &middot; J K L shuttle &middot; &larr; &rarr; frame &middot; I O mark &middot; Enter add</p></div><button class="modalbtn" id="helpClose">Got it</button></div></div>
 
 <script>
 (function(){
   "use strict";
-  var CTX={name:'Eleanor Vance',sender:'Isaiah Smith',film:'The Lighthouse Keeper',duration:872,budget:120,ready:false,used:0};
+  var CTX={name:'Eleanor Vance',sender:'Isaiah Smith',film:'The Lighthouse Keeper',duration:872,budget:120,ready:false,used:0,expiresAt:null};
   var TOKEN=(location.pathname.match(/^\/r\/([^\/?#]+)/)||[])[1]||null;
   var $=function(id){return document.getElementById(id);};
   function fmt(s){s=Math.max(0,Math.round(s));var m=Math.floor(s/60),ss=s%60;return m+':'+(ss<10?'0':'')+ss;}
@@ -370,18 +372,30 @@
   // centered text avoids half-words at the tile seams.
   function setWatermark(name){
     var n=(name||'').trim();
-    var label = n ? (n.length>22 ? n.slice(0,21)+'\u2026' : n).toUpperCase() : 'MAGIC REEL \u00b7 PREVIEW';
-    var t=xmlEsc(label);
-    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="250" height="150">'
-      +'<text x="125" y="82" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1" paint-order="stroke" stroke="#000" stroke-opacity="0.16" stroke-width="2.6" fill="#fff" fill-opacity="0.22" transform="rotate(-24 125 75)">'+t+'</text>'
-      +'</svg>';
+    var TA='text-anchor="middle" font-family="Poppins,Arial,sans-serif" paint-order="stroke" stroke="#000" stroke-opacity="0.20" fill="#fff" fill-opacity="0.20"';
+    var bottom='';
+    if(n){
+      var up=n.toUpperCase();
+      var parts=up.split(' ').filter(function(x){return x;});
+      if(up.length>15 && parts.length>1){
+        var first=parts[0], rest=parts.slice(1).join(' ');
+        bottom='<text x="800" y="690" font-size="76" font-weight="700" letter-spacing="3" '+TA+'>'+xmlEsc(first)+'</text>'
+             +'<text x="800" y="775" font-size="76" font-weight="700" letter-spacing="3" '+TA+'>'+xmlEsc(rest)+'</text>';
+      } else {
+        bottom='<text x="800" y="735" font-size="82" font-weight="700" letter-spacing="3" '+TA+'>'+xmlEsc(up)+'</text>';
+      }
+    }
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="none" width="100%" height="100%">'
+      +'<text x="800" y="215" font-size="96" font-weight="800" letter-spacing="6" '+TA+'>MAGIC REEL PREVIEW</text>'
+      +bottom+'</svg>';
     var wm=$('wm');
-    wm.style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';
-    wm.style.backgroundRepeat='repeat';
-    wm.style.backgroundPosition='center';
+    wm.style.backgroundImage='';
+    wm.innerHTML=svg;
     var lr=$('lowres'); if(lr) lr.innerHTML = n ? ('PREVIEW &middot; for '+xmlEsc(n)+' &middot; watermarked') : 'PREVIEW &middot; watermarked &middot; low-res';
   }
   setWatermark(null);
+  function updateExpiry(){ var el=$('expiry'); if(!el) return; if(!CTX.expiresAt){ el.style.display='none'; return; } var ms=new Date(CTX.expiresAt).getTime()-Date.now(); if(isNaN(ms)){ el.style.display='none'; return; } var txt; if(ms<=0){ txt='Link has expired'; } else { var tm=Math.floor(ms/60000), d=Math.floor(tm/1440), h=Math.floor(tm/60), m=tm%60; if(d>=2){ txt='Link expires in '+d+' days'; } else if(h>=24){ txt='Link expires in '+h+' hours'; } else if(h>=1){ txt='Link expires in '+h+'h '+m+'m'; } else { txt='Link expires in '+m+' min'; } } el.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v4.8l3 1.8"/></svg><span>'+txt+'</span>'; el.style.display='inline-flex'; }
+  setInterval(updateExpiry,30000);
 
   $('grName').textContent='there';
   $('grSender').textContent=CTX.sender;
@@ -502,13 +516,13 @@
     else player.removeAttribute('playback-token');
     player.setAttribute('playback-id', j.playbackId);
   }
-  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=stripExtJS(j.filmName)||CTX.film; if(j.fps>0) FPS=j.fps; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; deckLock(); hideMsg(); }
+  function loadFilm(j){ CTX.sendId=j.sendId; CTX.film=stripExtJS(j.filmName)||CTX.film; if(j.fps>0) FPS=j.fps; $('grFilm').textContent=CTX.film; if(j.duration){ CTX.duration=j.duration; $('tot').textContent='/ '+fmt(CTX.duration); updateMarkers(); renderSegments(); renderBudget(); } setPlayback(j); CTX.ready=true; deckLock(); hideMsg(); if(j.expiresAt)CTX.expiresAt=j.expiresAt; updateExpiry(); }
   var loadPoll=null;
   function checkSend(id){ fetch('/api/sends/'+id+'/status').then(function(r){return r.json();}).then(function(j){ if(j.status==='ready'&&j.playbackId){ clearTimeout(loadPoll); loadFilm(j); } else if(j.status==='error'){ clearTimeout(loadPoll); showMsg('This film couldn\u2019t be processed.',false); } else { showMsg('Your footage is still processing\u2026',true); loadPoll=setTimeout(function(){checkSend(id);},3000); } }).catch(function(){ loadPoll=setTimeout(function(){checkSend(id);},4000); }); }
   // Token mode: load this recipient's film + their personal budget from the server.
   // No token (opened at /): fall back to the latest-upload demo behavior.
   function applyRecipient(j){
-    CTX.name=j.name||CTX.name; CTX.film=stripExtJS(j.filmName)||CTX.film;
+    CTX.name=j.name||CTX.name; CTX.film=stripExtJS(j.filmName)||CTX.film; if(j.expiresAt)CTX.expiresAt=j.expiresAt; updateExpiry();
     if(j.fps>0) FPS=j.fps;
     if(typeof j.budgetSeconds==='number') CTX.budget=j.budgetSeconds;
     if(typeof j.usedSeconds==='number') CTX.used=j.usedSeconds;
