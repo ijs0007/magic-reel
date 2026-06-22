@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.10.0 — 🎬 Studio: tabbed Send · Preview · Dashboard · Settings';
+const APP_VERSION = 'v0.10.1 — 🎯 True Preview: mirrors the recipient\u2019s real time limit';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -558,14 +558,26 @@ app.get('/api/latest-preview', async (req, res) => {
     if (!s.rows.length) return res.json({ none: true });
     const sendId = s.rows[0].id;
     const filmName = s.rows[0].film_name || 'Untitled';
-    const ex = await pool.query('SELECT token FROM reel_recipients WHERE send_id = $1 AND is_preview IS TRUE ORDER BY created_at ASC LIMIT 1', [sendId]);
+    // Mirror the real recipients' budget so Preview reflects what a recipient actually sees.
+    // Use the most generous real-recipient budget; fall back to MAX_CUT_SECONDS only if none exist yet.
+    const bq = await pool.query(
+      'SELECT MAX(budget_seconds) AS b FROM reel_recipients WHERE send_id = $1 AND is_preview IS NOT TRUE',
+      [sendId]);
+    const targetBudget = (bq.rows.length && bq.rows[0].b != null) ? Number(bq.rows[0].b) : MAX_CUT_SECONDS;
+    const ex = await pool.query('SELECT token, budget_seconds FROM reel_recipients WHERE send_id = $1 AND is_preview IS TRUE ORDER BY created_at ASC LIMIT 1', [sendId]);
     let token;
-    if (ex.rows.length) { token = ex.rows[0].token; }
-    else {
+    if (ex.rows.length) {
+      token = ex.rows[0].token;
+      // Keep the preview budget in sync; reset usage only when the budget actually changes, so an
+      // ordinary re-open doesn't wipe in/out marks but a budget correction starts from a clean slate.
+      if (Number(ex.rows[0].budget_seconds) !== targetBudget) {
+        await pool.query('UPDATE reel_recipients SET budget_seconds = $1, used_seconds = 0 WHERE token = $2', [targetBudget, token]);
+      }
+    } else {
       token = genToken();
       await pool.query(
         'INSERT INTO reel_recipients (token, send_id, name, email, budget_seconds, is_preview) VALUES ($1, $2, $3, $4, $5, true)',
-        [token, sendId, 'Preview', null, MAX_CUT_SECONDS]);
+        [token, sendId, 'Preview', null, targetBudget]);
     }
     res.json({ token: token, filmName: filmName, sendId: sendId });
   } catch (e) { res.status(500).json({ error: e.message }); }
