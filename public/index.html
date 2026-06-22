@@ -357,7 +357,7 @@
     <div id="upPreview" class="up-preview hidden"></div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.10.2 &mdash; &#9203; Prep-first expiry</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.10.4 &mdash; &#128290; Smarter titles</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
@@ -439,9 +439,22 @@
   function fmtSize(b){if(!b)return'';var u=['B','KB','MB','GB'];var i=Math.floor(Math.log(b)/Math.log(1024));return (b/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];}
   function fmtDur(s){if(!isFinite(s)||!s)return'';s=Math.round(s);var m=Math.floor(s/60),ss=s%60;return m+':'+(ss<10?'0':'')+ss;}
   var drop=$('drop'),filein=$('filein'),filecard=$('filecard'),thumb=$('thumb'),fname=$('fname'),fmeta=$('fmeta');
+  // Break run-together words at camelCase / PascalCase boundaries so "TheGiftOfServing"
+  // reads as "The Gift Of Serving". Char-by-char (no regex) to stay clipboard/Git safe.
+  function splitCamel(t){
+    var out='';
+    for(var i=0;i<t.length;i++){
+      var c=t.charAt(i), p=(i>0?t.charAt(i-1):''), n=(i+1<t.length?t.charAt(i+1):'');
+      var cU=(c>='A'&&c<='Z'), pLow=(p>='a'&&p<='z'), pUp=(p>='A'&&p<='Z'), nLow=(n>='a'&&n<='z');
+      // boundary: lower then Upper (theGift), or an acronym run then Upper+lower (HDVideo -> HD Video)
+      if(i>0 && cU && (pLow || (pUp && nLow))) out+=' ';
+      out+=c;
+    }
+    return out;
+  }
   function cleanTitle(name){
     var s=String(name||''); var dot=s.lastIndexOf('.'); if(dot>0) s=s.slice(0,dot);
-    var raw=s.split('_').join(' ').split('-').join(' ').split('.').join(' ');
+    var raw=splitCamel(s.split('_').join(' ').split('-').join(' ').split('.').join(' '));
     var toks=raw.split(' ').filter(function(x){return x;});
     var meta={final:1,draft:1,original:1,export:1,render:1,copy:1,youtube:1,socials:1,social:1,ig:1,fb:1,tiktok:1,proxy:1,h264:1,prores:1,master:1};
     function allDigits(t){ for(var i=0;i<t.length;i++){var c=t.charAt(i); if(c<'0'||c>'9') return false;} return t.length>0; }

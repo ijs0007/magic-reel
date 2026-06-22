@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.10.3 — 👤 Preview mirrors the recipient: name, watermark & time';
+const APP_VERSION = 'v0.10.4 — 🔤 Smarter titles: split run-together filenames into words';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
