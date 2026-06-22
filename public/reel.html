@@ -336,7 +336,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.9.22 &mdash; &#9201;&#65039; Avid controls + expiry clock</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.9.24 &mdash; &#128274; Bigger watermark + brand subject</footer>
 </div>
 
 <div class="bar">
@@ -377,12 +377,16 @@
     if(n){
       var up=n.toUpperCase();
       var parts=up.split(' ').filter(function(x){return x;});
-      if(up.length>15 && parts.length>1){
-        var first=parts[0], rest=parts.slice(1).join(' ');
-        bottom='<text x="800" y="690" font-size="76" font-weight="700" letter-spacing="3" '+TA+'>'+xmlEsc(first)+'</text>'
-             +'<text x="800" y="775" font-size="76" font-weight="700" letter-spacing="3" '+TA+'>'+xmlEsc(rest)+'</text>';
+      function nameFs(longest){ return Math.max(95, Math.min(220, Math.floor(2200/Math.max(1,longest)))); }
+      if(parts.length>1){
+        var first=parts[0], last=parts.slice(1).join(' ');
+        var size=nameFs(Math.max(first.length,last.length));
+        var y1=600-Math.round(size*0.55), y2=600+Math.round(size*0.55)+14;
+        bottom='<text x="800" y="'+y1+'" font-size="'+size+'" font-weight="800" letter-spacing="2" '+TA+'>'+xmlEsc(first)+'</text>'
+             +'<text x="800" y="'+y2+'" font-size="'+size+'" font-weight="800" letter-spacing="2" '+TA+'>'+xmlEsc(last)+'</text>';
       } else {
-        bottom='<text x="800" y="735" font-size="82" font-weight="700" letter-spacing="3" '+TA+'>'+xmlEsc(up)+'</text>';
+        var size1=nameFs(up.length);
+        bottom='<text x="800" y="645" font-size="'+size1+'" font-weight="800" letter-spacing="2" '+TA+'>'+xmlEsc(up)+'</text>';
       }
     }
     var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="none" width="100%" height="100%">'

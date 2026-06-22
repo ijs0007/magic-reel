@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.9.23 — ✉️ Titled emails + expiry picker';
+const APP_VERSION = 'v0.9.24 — 🔒 Bigger watermark + brand subject';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -130,7 +130,7 @@ async function sendReelEmail(to, name, link, filmName, budgetSeconds, sourceFile
   var named = film && film !== 'Untitled';
   var phrase = named ? '\u201c' + emailEsc(film) + '\u201d' : 'your footage';
   var cap = fmtClock(budgetSeconds);
-  var subject = 'Magic Reels | ' + (named ? film + ' | ' : '') + 'Choose Your Selects';
+  var subject = 'Magic Reel | ' + (named ? film + ' | ' : '') + 'Choose Your Selects';
   var html = emailShell(emailEsc(reelFirstName(name)), reelReadyLine(phrase, cap), link, emailEsc(sourceFile || ''));
   try {
     var r = await fetch('https://api.resend.com/emails', {
