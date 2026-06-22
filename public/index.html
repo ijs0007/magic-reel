@@ -268,7 +268,7 @@
   </header>
 
   <h1 class="title">Send selects</h1>
-  <p class="sub">Pick who gets reels, set the length, then drop your film &mdash; it sends on its own.</p>
+  <p class="sub">Pick who gets reels, set the length and expiry, then drop your film &mdash; it sends on its own.</p>
 
   <!-- STEP 1 -->
   <div class="card" id="whoCard">
@@ -283,6 +283,11 @@
       <span class="colon">:</span>
       <input class="tnum" id="defSec" type="number" min="0" max="59" inputmode="numeric" aria-label="seconds"><span class="u">sec</span>
       <span class="dlc-hint" id="defLenHint">Up to 10:00</span>
+    </div>
+
+    <div class="deflen">
+      <div class="dl-label">Link expires<small>How long each private link stays live</small></div>
+      <select class="msm" id="expirySel"><option value="3" selected>In 3 days</option><option value="7">In 1 week</option><option value="14">In 2 weeks</option><option value="30">In 30 days</option></select>
     </div>
 
     <button type="button" class="picker-toggle" id="pickerToggle" aria-expanded="false">
@@ -347,14 +352,12 @@
     <div class="filedeets" id="filedeets">
       <label class="fd-label" for="filmTitle">Title <span class="fd-sub">&mdash; shown in the email subject</span></label>
       <input class="fd-input" id="filmTitle" type="text" placeholder="Film title" autocomplete="off" spellcheck="false">
-      <label class="fd-label" for="expirySel">Link expires</label>
-      <select class="msm" id="expirySel"><option value="3">In 3 days</option><option value="7">In 1 week</option><option value="14" selected>In 2 weeks</option><option value="30">In 30 days</option></select>
     </div>
     <div id="upStatus" class="up-status hidden"></div>
     <div id="upPreview" class="up-preview hidden"></div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.10.0 &mdash; &#127916; Studio shell</footer>
+  <footer class="ver" id="ver">Magic Reel &middot; v0.10.2 &mdash; &#9203; Prep-first expiry</footer>
   <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
 </div>
 
