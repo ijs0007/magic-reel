@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.10.6 — 📬 Delivery status: delivered / bounced / not-opened per recipient';
+const APP_VERSION = 'v0.10.7 — 🔗 Suite Pass: MSM shared-login cookie accepted';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -248,7 +248,37 @@ function parseCookies(req) {
   });
   return out;
 }
-function isAuthed(req) { return !DASHBOARD_PASSWORD || parseCookies(req)[AUTH_COOKIE] === authToken(); }
+function isAuthed(req) { return !DASHBOARD_PASSWORD || parseCookies(req)[AUTH_COOKIE] === authToken() || msmAuthed(req); }
+
+// --- Magic Suite SSO: also accept MSM's shared login cookie ----------------
+// MSM (app.isaiahsmithfilms.com) signs an `msm_auth` cookie scoped to the parent
+// domain (.isaiahsmithfilms.com) with the shared SESSION_SECRET, so it rides along
+// to reels.* automatically. We verify it with the SAME secret and scheme MSM uses;
+// a valid, unexpired, non-guest token means the owner is logged in. If SESSION_SECRET
+// is unset or no cookie is present, msmAuthed() returns false and we fall back to
+// Reel's own password gate. Read-only — Reel never sets or clears this cookie.
+// (regexes use [+] [/] char-classes, not backslashes, to survive .gitattributes.)
+const SESSION_SECRET = process.env.SESSION_SECRET || '';
+const MSM_AUTH_COOKIE = 'msm_auth';
+function b64urlMsm(buf) {
+  return Buffer.from(buf).toString('base64').replace(/[+]/g, '-').replace(/[/]/g, '_').replace(/=+$/, '');
+}
+function validMsmToken(tok) {
+  if (!SESSION_SECRET || !tok || tok.indexOf('.') === -1) return null;
+  const parts = tok.split('.');
+  const expected = b64urlMsm(crypto.createHmac('sha256', SESSION_SECRET).update(parts[0]).digest());
+  const a = Buffer.from(parts[1]); const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString());
+    return payload.exp > Date.now() ? payload : null;
+  } catch (e) { return null; }
+}
+// True when a valid MSM session cookie for the OWNER (admin, not a guest) is present.
+function msmAuthed(req) {
+  const payload = validMsmToken(parseCookies(req)[MSM_AUTH_COOKIE]);
+  return !!payload && payload.role !== 'guest';
+}
 
 // Gate runs before static + routes. Owner surface needs the cookie; everything a
 // recipient or the login page touches passes through untouched.
