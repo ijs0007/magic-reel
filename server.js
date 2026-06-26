@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.10.8 — 🧭 Suite switcher: hop between Story Maker, Reel, Marquee';
+const APP_VERSION = 'v0.11.0 — 🟠 Credits in switcher + orange accent';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -103,7 +103,7 @@ function emailShell(firstEsc, bodyHtml, link, fileNote) {
   return '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.65;max-width:460px;margin:0 auto;padding:12px 0;">' +
     '<p style="font-size:16px;font-weight:600;margin:0 0 16px;">Hi ' + firstEsc + ',</p>' +
     '<p style="font-size:15px;color:#3a3a3c;margin:0 0 26px;">' + bodyHtml + '</p>' +
-    '<p style="margin:0 0 26px;"><a href="' + link + '" style="background:#7c4dff;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:11px;display:inline-block;">Open your reel</a></p>' +
+    '<p style="margin:0 0 26px;"><a href="' + link + '" style="background:#f45911;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:11px;display:inline-block;">Open your reel</a></p>' +
     '<p style="font-size:14px;color:#3a3a3c;margin:0 0 3px;">All the best,</p>' +
     '<p style="font-size:14px;color:#1a1a1c;font-weight:600;margin:0 0 22px;">Isaiah Jeremiah</p>' +
     '<p style="color:#a0a0a0;font-size:12.5px;margin:0;">Your private link — just for you.</p>' +
@@ -299,7 +299,7 @@ const LOGIN_HTML = '<!doctype html><html lang="en"><head>' +
 '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
 '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">' +
 '<style>' +
-':root{--bg:#faf9f5;--surface:#fff;--text:#1a1a18;--text-soft:#6b6b66;--border:#e7e5df;--accent:#7c4dff;--accent-text:#fff;--bad:#c2410c}' +
+':root{--bg:#faf9f5;--surface:#fff;--text:#1a1a18;--text-soft:#6b6b66;--border:#e7e5df;--accent:#f45911;--accent-text:#fff;--bad:#c2410c}' +
 '*{box-sizing:border-box}' +
 'body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:24px}' +
 '.card{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:34px 28px;box-shadow:0 12px 40px rgba(0,0,0,.06)}' +
