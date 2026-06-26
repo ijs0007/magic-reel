@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.10.7 — 🔗 Suite Pass: MSM shared-login cookie accepted';
+const APP_VERSION = 'v0.10.8 — 🧭 Suite switcher: hop between Story Maker, Reel, Marquee';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

@@ -39,6 +39,11 @@
   .brand .star{font-size:20px;color:var(--t2)}
   .brand .wm{background:linear-gradient(92deg,var(--t1),var(--t2) 55%,var(--t3));-webkit-background-clip:text;background-clip:text;color:transparent}
   .hdr-actions{display:flex;align-items:center;gap:8px}
+  .msuite-switch{display:flex;align-items:center;gap:9px;font-size:13px;font-family:inherit}
+  .msuite-switch a{color:var(--text-soft);text-decoration:none;white-space:nowrap}
+  .msuite-switch a:hover{color:var(--text)}
+  .msuite-switch a.msuite-on{color:var(--accent);font-weight:600;cursor:default}
+  .msuite-switch .msuite-dot{color:var(--text-soft);opacity:.45}
   .theme-toggle{font-size:16px;line-height:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text)}
   .theme-toggle:hover{background:var(--pick-bg)}
 
@@ -115,6 +120,13 @@
 <header>
   <div class="brand"><span class="star">&#10022;</span><span class="wm">Magic Reel</span></div>
   <div class="hdr-actions">
+    <nav class="msuite-switch" aria-label="Switch app">
+      <a href="https://app.isaiahsmithfilms.com" data-app="msm">Story Maker</a>
+      <span class="msuite-dot" aria-hidden="true">&middot;</span>
+      <a href="https://reels.isaiahsmithfilms.com/studio" data-app="reel">Reel</a>
+      <span class="msuite-dot" aria-hidden="true">&middot;</span>
+      <a href="https://marquee.isaiahsmithfilms.com" data-app="marquee">Marquee</a>
+    </nav>
     <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">&#9728;&#65039;</button>
   </div>
 </header>
@@ -176,7 +188,7 @@
   </div>
 </main>
 
-<footer class="ver" id="ver">Magic Reel &middot; v0.10.0 &mdash; &#127916; Studio shell</footer>
+<footer class="ver" id="ver">Magic Reel &middot; v0.10.8 &mdash; &#128279; Suite switcher</footer>
 
 <script>
   "use strict";
@@ -329,6 +341,17 @@
 
   /* ---------- Init ---------- */
   applyShellTheme();
+
+  /* Magic Suite switcher: light up whichever app we're in */
+  (function(){
+    var h = (location.hostname || '').toLowerCase();
+    var cur = h.indexOf('reels.') === 0 ? 'reel'
+            : h.indexOf('marquee.') === 0 ? 'marquee'
+            : h.indexOf('app.') === 0 ? 'msm' : '';
+    if (!cur) return;
+    var el = document.querySelector('.msuite-switch a[data-app="' + cur + '"]');
+    if (el) { el.classList.add('msuite-on'); el.removeAttribute('href'); }
+  })();
 
   /* footer version (authoritative value from /version) */
   fetch('/version').then(function(r){ return r.json(); }).then(function(j){
