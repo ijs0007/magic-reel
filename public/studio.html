@@ -46,6 +46,21 @@
   .msuite-switch .msuite-dot{color:var(--text-soft);opacity:.45}
   .theme-toggle{font-size:16px;line-height:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text)}
   .theme-toggle:hover{background:var(--pick-bg)}
+  /* Fast menu (hamburger): the only header control besides the switcher. Holds the
+     dark/light toggle + a (disabled, placeholder) Log out. Themed with Reel's vars. */
+  .hdr-actions{position:relative}
+  .menu-btn{font-size:18px;line-height:1;padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;display:inline-flex;align-items:center}
+  .menu-btn:hover{background:var(--pick-bg)}
+  .fast-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:70;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:7px;box-shadow:0 12px 34px rgba(0,0,0,.30);display:flex;flex-direction:column;gap:1px}
+  .fast-menu[hidden]{display:none}
+  .fast-menu .fm-item{font-family:inherit;font-size:14px;text-align:left;background:transparent;border:none;border-radius:8px;color:var(--text);cursor:pointer;padding:11px}
+  .fast-menu .fm-item:hover{background:var(--bg)}
+  .fast-menu .fm-item.fm-disabled{color:var(--text-soft);opacity:.5;cursor:not-allowed}
+  .fast-menu .fm-item.fm-disabled:hover{background:transparent}
+  @media (max-width:560px){
+    header{flex-wrap:wrap;gap:8px}
+    .hdr-actions{width:100%;justify-content:space-between}
+  }
 
   /* ---------- Tab bar ---------- */
   nav.tabs{
@@ -129,7 +144,11 @@
       <span class="msuite-dot" aria-hidden="true">&middot;</span>
       <a href="https://credits.isaiahsmithfilms.com" data-app="credits">Credits</a>
     </nav>
-    <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">&#9728;&#65039;</button>
+    <button class="menu-btn" id="menuBtn" type="button" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">&#9776;</button>
+    <div class="fast-menu" id="fastMenu" hidden>
+      <button class="fm-item" id="themeBtn" type="button" aria-label="Toggle theme">&#9728;&#65039; Light mode</button>
+      <button class="fm-item fm-disabled" type="button" disabled aria-disabled="true" title="Log out isn&rsquo;t wired up yet">&#8617; Log out</button>
+    </div>
   </div>
 </header>
 
@@ -190,7 +209,7 @@
   </div>
 </main>
 
-<footer class="ver" id="ver">Magic Reel &middot; v0.10.8 &mdash; &#128279; Suite switcher</footer>
+<footer class="ver" id="ver">Magic Reel &middot; v0.12.0 &mdash; &#9776; Fast menu</footer>
 
 <script>
   "use strict";
@@ -202,7 +221,7 @@
 
   function applyShellTheme(){
     document.body.classList.toggle('dark', dark);
-    var tb = $('themeBtn'); if(tb) tb.innerHTML = dark ? '&#9728;&#65039;' : '&#127769;';
+    var tb = $('themeBtn'); if(tb) tb.innerHTML = dark ? '&#9728;&#65039; Light mode' : '&#127769; Dark mode';
     var m = $('themeColorMeta'); if(m) m.setAttribute('content', dark ? '#1a1a1c' : '#faf9f5');
   }
   function postThemeTo(frame){
@@ -223,6 +242,24 @@
   for(var fi=0; fi<FRAMES.length; fi++){
     (function(f){ if(f) f.addEventListener('load', function(){ postThemeTo(f); }); })($(FRAMES[fi]));
   }
+
+  /* ---------- Fast menu (header hamburger) ---------- */
+  (function(){
+    var btn = $('menuBtn'), menu = $('fastMenu');
+    if(!btn || !menu) return;
+    function closeMenu(){ menu.hidden = true; btn.setAttribute('aria-expanded','false'); }
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(menu.hidden){ menu.hidden = false; btn.setAttribute('aria-expanded','true'); }
+      else { closeMenu(); }
+    });
+    /* Clicking the theme item flips the theme in place and keeps the menu open
+       (it lives inside the menu). Any click outside closes it. */
+    document.addEventListener('click', function(e){
+      if(menu.hidden) return;
+      if(!menu.contains(e.target) && e.target !== btn) closeMenu();
+    });
+  })();
 
   /* ---------- Tabs ---------- */
   var TABS = [
