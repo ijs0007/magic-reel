@@ -15,8 +15,10 @@ Changed:
 - `server.js` — recipient-page `:root --accent` and the "Open your reel" email button background → orange.
 - `server.js` `APP_VERSION` bumped `v0.10.8` → `v0.11.0`.
 
-**Left unchanged on purpose (assumption — confirm if you disagree):**
-- The `AVA=[...]` avatar palette in `dashboard.html` and `index.html` starts with `#7c4dff`. That array is a *categorical 8-color wheel* assigning distinct colors to different people, not the brand accent, so I left it. If you'd rather its first slot match the new orange, say so.
+Also swept the old-purple leftover:
+- The `AVA=[...]` avatar palette in `dashboard.html` and `index.html` had `#7c4dff` as its first slot → changed to `#f45911` so it leads with the new brand orange. (The other 7 wheel colors are unrelated and untouched.)
+
+✅ CLAUDE.md accent table updated across all four repos to the new mapping.
 
 ### Orange gradient choice
 For the wordmark gradient I derived `#ff8a3d / #f45911 / #ffb74d` (light → base → light) since there was no existing orange gradient at `#f45911`. Easy to tweak if you want a different feel.

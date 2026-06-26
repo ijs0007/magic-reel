@@ -391,7 +391,7 @@
   (function(){ var hs=$('helpScrim'); if(!hs)return; function openH(){hs.classList.add('show');} function closeH(){hs.classList.remove('show');} var hb=$('helpBtn'); if(hb)hb.addEventListener('click',openH); var hc=$('helpClose'); if(hc)hc.addEventListener('click',closeH); hs.addEventListener('click',function(e){ if(e.target===hs) closeH(); }); })();
 
   /* mock data */
-  var AVA=['#7c4dff','#e0667b','#36b1a1','#c98a3a','#5b8def','#3aa6d6','#d06fa8','#6aa84f'];
+  var AVA=['#f45911','#e0667b','#36b1a1','#c98a3a','#5b8def','#3aa6d6','#d06fa8','#6aa84f'];
   function avaColor(id){var s=0;for(var i=0;i<id.length;i++)s+=id.charCodeAt(i);return AVA[s%AVA.length];}
   function initials(n){return n.split(' ').filter(Boolean).slice(0,2).map(function(w){return w[0];}).join('').toUpperCase();}
   function emailFor(n){return n.toLowerCase().replace(/[^a-z ]/g,'').trim().replace(/\s+/g,'.')+'@email.com';}

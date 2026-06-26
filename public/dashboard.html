@@ -202,7 +202,7 @@
 
   $('themeBtn').addEventListener('click',function(){var d=document.body.classList.toggle('dark');$('themeBtn').innerHTML=d?'&#9728;&#65039;':'&#127769;';$('themeColorMeta').setAttribute('content',d?'#1a1a1c':'#faf9f5');});
 
-  var AVA=['#7c4dff','#e0667b','#36b1a1','#c98a3a','#5b8def','#3aa6d6','#d06fa8','#6aa84f'];
+  var AVA=['#f45911','#e0667b','#36b1a1','#c98a3a','#5b8def','#3aa6d6','#d06fa8','#6aa84f'];
   function avaColor(id){var s=0;for(var i=0;i<id.length;i++)s+=id.charCodeAt(i);return AVA[s%AVA.length];}
   function initials(n){return n.split(' ').filter(Boolean).slice(0,2).map(function(w){return w[0];}).join('').toUpperCase();}
 
