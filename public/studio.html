@@ -30,15 +30,12 @@
   }
 
   /* ---------- Header (brand row) ---------- */
-  /* ===== Suite header — same two-row structure as the other apps (Part 1): brand row
-     (badge + wordmark) then the switcher, full-width divider underneath; hamburger
-     pinned top-right. Differs only by name, accent, and logo glyph. ===== */
-  header{ position:relative; flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-start; gap:7px; padding:16px 16px 12px; border-bottom:1px solid var(--border); }
-  .brand{display:flex;align-items:center;gap:11px;font-size:27px;font-weight:700;font-family:'Poppins','Segoe UI',-apple-system,sans-serif;letter-spacing:-.01em}
+  /* ===== Suite header — IDENTICAL across all four apps. Full-width band (ignores each app's
+     container via margin:0 calc(50% - 50vw)) so the wordmark, switcher, divider and hamburger
+     land in the exact same place everywhere — no bounce. Differs only by app name and accent. ===== */
+  header{ position:relative; box-sizing:border-box; flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-start; gap:5px; margin:0 calc(50% - 50vw) 22px; padding:18px 22px 14px; border-bottom:1px solid var(--border); }
+  .brand{display:flex;align-items:center;font-size:26px;font-weight:700;font-family:'Poppins','Segoe UI',-apple-system,sans-serif;letter-spacing:-.01em;line-height:1.1}
   .brand .wm{background:linear-gradient(92deg,var(--t1),var(--t2) 55%,var(--t3));-webkit-background-clip:text;background-clip:text;color:transparent}
-  /* Part 2: boxed logo badge — rounded square, accent border + accent glyph, subtle dark fill. */
-  .brand-badge{flex:none;width:30px;height:30px;border-radius:8px;border:1.5px solid var(--accent);background:rgba(0,0,0,0.22);color:var(--accent);display:inline-flex;align-items:center;justify-content:center}
-  .brand-badge svg{width:17px;height:17px;display:block}
   .msuite-switch{display:flex;align-items:center;gap:9px;font-size:14px;font-family:inherit}
   .msuite-switch a{color:var(--text-soft);text-decoration:none;white-space:nowrap}
   .msuite-switch a:hover{color:var(--text)}
@@ -46,20 +43,23 @@
   .msuite-switch .msuite-dot{color:var(--text-soft);opacity:.45}
   .theme-toggle{font-size:16px;line-height:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text)}
   .theme-toggle:hover{background:var(--pick-bg)}
-  /* Fast menu (hamburger), pinned top-right; holds the dark/light toggle + a disabled Log out. */
-  .menu-btn{position:absolute;top:14px;right:16px;z-index:71;font-size:18px;line-height:1;padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;display:inline-flex;align-items:center}
-  .menu-btn:hover{background:var(--pick-bg)}
-  .fast-menu{position:absolute;top:52px;right:16px;z-index:70;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:7px;box-shadow:0 12px 34px rgba(0,0,0,.30);display:flex;flex-direction:column;gap:1px}
+  /* Hamburger — clean lines, no enclosure box, pinned top-right. */
+  .menu-btn{position:absolute;top:18px;right:22px;z-index:71;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;border:none;border-radius:9px;background:none;color:var(--text);cursor:pointer}
+  .menu-btn:hover{color:var(--accent);background:none}
+  .menu-btn svg{display:block}
+  .fast-menu{position:absolute;top:56px;right:22px;z-index:70;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:7px;box-shadow:0 12px 34px rgba(0,0,0,.30);display:flex;flex-direction:column;gap:1px}
   .fast-menu[hidden]{display:none}
   .fast-menu .fm-item{font-family:inherit;font-size:14px;text-align:left;background:transparent;border:none;border-radius:8px;color:var(--text);cursor:pointer;padding:11px}
   .fast-menu .fm-item:hover{background:var(--bg)}
   .fast-menu .fm-item.fm-disabled{color:var(--text-soft);opacity:.5;cursor:not-allowed}
   .fast-menu .fm-item.fm-disabled:hover{background:transparent}
-  /* Part 3: mobile centers the brand + switcher; hamburger stays pinned top-right. */
-  @media (max-width:560px){
-    header{gap:6px;padding:14px 16px 10px;align-items:center}
-    .brand{font-size:20px;gap:9px;justify-content:center}
+  /* Mobile (≤600px) — center the brand + switcher; line-hamburger stays top-right. */
+  @media (max-width:600px){
+    header{align-items:center;gap:5px;padding:15px 16px 12px;margin-bottom:16px}
+    .brand{font-size:21px}
     .msuite-switch{justify-content:center;width:100%}
+    .menu-btn{top:13px;right:13px;width:32px;height:32px}
+    .fast-menu{top:50px;right:13px}
   }
 
   /* ---------- Tab bar ---------- */
@@ -133,8 +133,8 @@
 <body class="dark">
 
 <header>
-  <button class="menu-btn" id="menuBtn" type="button" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">&#9776;</button>
-  <div class="brand"><span class="brand-badge" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="8.5" width="18" height="11.5" rx="1.5"/><path d="M3.4 8.5 6 5l3 1-2.3 2.5zM9.4 6.1 12.4 7l-2.3 2.5zM15 7.1 18 8l-2.3 2.5z"/></svg></span><span class="wm">Magic Reel</span></div>
+  <button class="menu-btn" id="menuBtn" type="button" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3.5" y1="7" x2="20.5" y2="7"/><line x1="3.5" y1="12" x2="20.5" y2="12"/><line x1="3.5" y1="17" x2="20.5" y2="17"/></svg></button>
+  <div class="brand"><span class="wm">Magic Reel</span></div>
   <nav class="msuite-switch" aria-label="Switch app">
     <a href="https://app.isaiahsmithfilms.com" data-app="msm">Story Maker</a>
     <span class="msuite-dot" aria-hidden="true">&middot;</span>
@@ -207,7 +207,7 @@
   </div>
 </main>
 
-<footer class="ver" id="ver">Magic Reel &middot; v0.13.0 &mdash; &#127916; Unified header</footer>
+<footer class="ver" id="ver">Magic Reel &middot; v0.14.0 &mdash; &#10024; Slim header</footer>
 
 <script>
   "use strict";
