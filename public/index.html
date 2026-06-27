@@ -261,6 +261,7 @@
   .sentlist .sr .nm .emailed{display:inline-block;margin-left:7px;font-size:9.5px;font-weight:600;color:var(--good);border:1px solid var(--good);border-radius:999px;padding:0 6px;vertical-align:middle;letter-spacing:.02em}
   body.embed header{display:none}
   body.embed .ver{display:none}
+  body.embed{padding-bottom:24px}   /* trim the standalone bottom space so the studio footer hugs the content */
 </style>
 </head>
 <body class="dark">
@@ -824,6 +825,18 @@
 
   renderProjPick();renderRecipientList();refresh();
 })();
+
+  /* Report content height to the studio shell so it can size the stage and let the footer
+     scroll naturally. Only when embedded (has a parent frame). */
+  (function(){
+    if(window.parent === window) return;
+    var lastH = 0;
+    function reportH(){ try{ var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight); if(Math.abs(h - lastH) < 2) return; lastH = h; window.parent.postMessage({ type:'mr-height', height:h }, location.origin); }catch(e){} }
+    window.addEventListener('load', reportH);
+    window.addEventListener('resize', reportH);
+    if(window.ResizeObserver){ try{ new ResizeObserver(reportH).observe(document.body); }catch(e){} }
+    setTimeout(reportH, 250); setTimeout(reportH, 1000);
+  })();
 </script>
 </body>
 </html>

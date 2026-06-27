@@ -28,7 +28,7 @@
   ::-webkit-scrollbar-thumb{ background:rgba(150,150,160,.30); border-radius:999px; border:2px solid transparent; background-clip:padding-box; min-height:32px; }
   ::-webkit-scrollbar-thumb:hover{ background:rgba(170,170,180,.55); }
   ::-webkit-scrollbar-corner{ background:transparent; }
-  html,body{margin:0;padding:0;height:100%}
+  html,body{margin:0;padding:0}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     background:var(--bg); color:var(--text); line-height:1.5;
@@ -75,6 +75,7 @@
   nav.tabs{
     flex:0 0 auto;
     display:flex; gap:6px;
+    width:100%; max-width:860px; margin:0 auto; box-sizing:border-box;
     padding:0 22px 12px;
     background:var(--bg);
   }
@@ -93,7 +94,10 @@
   .tab.active{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
 
   /* ---------- Stage (holds frames) ---------- */
-  main.stage{flex:1;min-height:0;position:relative}
+  /* The stage sizes to the active view's content (set by JS via iframe height reports) so the
+     page flows and the footer scrolls naturally instead of being pinned. Falls back to a
+     viewport-height default before any report arrives (graceful — content never collapses). */
+  main.stage{flex:0 0 auto;position:relative;height:calc(100dvh - 168px);min-height:320px}
   .frame{position:absolute;inset:0;border:0;display:none}
   iframe.frame{width:100%;height:100%}
   .frame.active{display:block}
@@ -219,7 +223,7 @@
   </div>
 </main>
 
-<footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.17.0</footer>
+<footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.18.0</footer>
 
 <script>
   "use strict";
@@ -288,12 +292,40 @@
     if(name === 'preview') openPreview();
     if(name === 'dash' && !dashLoaded){ dashLoaded = true; $('fDash').src = '/dashboard?embed=1'; }
     if(name === 'settings' && !settingsLoaded){ settingsLoaded = true; loadSettings(); }
+    applyStageHeight(); setTimeout(applyStageHeight, 80);
   }
   (function bindTabs(){
     for(var i=0;i<TABS.length;i++){
       (function(t){ $(t.tab).addEventListener('click', function(){ showTab(t.name); }); })(TABS[i]);
     }
   })();
+
+  /* ---------- Stage sizing: hug the Send/Dashboard iframe content so the footer scrolls
+     naturally; Preview/Settings keep the viewport-height default (CSS). ---------- */
+  var stage = document.querySelector('main.stage');
+  var frameH = {};   // last reported content height per view ('send' / 'dash')
+  function activeTab(){ for(var i=0;i<TABS.length;i++){ if($(TABS[i].frame).classList.contains('active')) return TABS[i]; } return null; }
+  function applyStageHeight(){
+    if(!stage) return;
+    var a = activeTab(); if(!a) return;
+    if(a.name === 'send' || a.name === 'dash'){
+      var h = frameH[a.name];
+      stage.style.height = (h && h > 120) ? (h + 'px') : '';   // '' → CSS viewport-height fallback
+    } else {
+      stage.style.height = '';   // Preview / Settings use the viewport-height default
+    }
+  }
+  window.addEventListener('message', function(e){
+    if(e.origin !== location.origin) return;
+    var d = e.data || {};
+    if(d.type !== 'mr-height' || !d.height) return;
+    var map = { fSend:'send', fDash:'dash' };
+    Object.keys(map).forEach(function(fid){
+      var fr = $(fid);
+      if(fr && fr.contentWindow === e.source){ frameH[map[fid]] = d.height; var a = activeTab(); if(a && a.frame === fid) applyStageHeight(); }
+    });
+  });
+  window.addEventListener('resize', function(){ applyStageHeight(); });
 
   /* ---------- Preview ---------- */
   var pvToken = null;

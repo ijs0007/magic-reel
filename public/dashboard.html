@@ -158,6 +158,7 @@
   @media (prefers-reduced-motion:reduce){*{animation-duration:.001s !important;transition-duration:.001s !important}}
   body.embed header{display:none}
   body.embed .ver{display:none}
+  body.embed{padding-bottom:24px}   /* trim the standalone bottom space so the studio footer hugs the content */
 </style>
 </head>
 <body class="dark">
@@ -417,6 +418,18 @@
   }
   load();
 })();
+
+  /* Report content height to the studio shell so it can size the stage and let the footer
+     scroll naturally. Only when embedded (has a parent frame). */
+  (function(){
+    if(window.parent === window) return;
+    var lastH = 0;
+    function reportH(){ try{ var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight); if(Math.abs(h - lastH) < 2) return; lastH = h; window.parent.postMessage({ type:'mr-height', height:h }, location.origin); }catch(e){} }
+    window.addEventListener('load', reportH);
+    window.addEventListener('resize', reportH);
+    if(window.ResizeObserver){ try{ new ResizeObserver(reportH).observe(document.body); }catch(e){} }
+    setTimeout(reportH, 250); setTimeout(reportH, 1000);
+  })();
 </script>
 </body>
 </html>
