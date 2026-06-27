@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.16.0 — 🎚️ Full-width tabs, trimmed footer';
+const APP_VERSION = 'v0.17.0 — 🌙 Dark-only + in-app Feedback';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -434,6 +434,36 @@ app.post('/api/resend-webhook', async function (req, res) {
 
 app.use(gate);
 app.use(express.static(path.join(__dirname, 'public'), { setHeaders: function(res, fp){ if(String(fp).toLowerCase().endsWith('.html')) res.set('Cache-Control','no-store, max-age=0'); } }));
+
+// ---------- In-app feedback (emails the team via Resend, like MSM) ----------
+// Reuses the existing RESEND_API_KEY + CALLSHEET_FROM env vars. Set FEEDBACK_TO in
+// Render to route feedback to a specific inbox (otherwise it goes to the FROM address).
+// Silently no-ops if Resend isn't configured — never blocks the UI.
+function fbEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]; }); }
+async function sendFeedbackEmail(note, room){
+  if (!RESEND_API_KEY || !CALLSHEET_FROM) { console.warn('[feedback] skipped — Resend not configured (need RESEND_API_KEY + CALLSHEET_FROM)'); return { ok:false }; }
+  const ownerEmail = CALLSHEET_FROM.replace(/^.*<([^>]+)>.*$/, '$1');
+  const to = (process.env.FEEDBACK_TO || ownerEmail || '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { console.warn('[feedback] skipped — no valid recipient; set FEEDBACK_TO'); return { ok:false }; }
+  const html = '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.5;">' +
+    '<p><strong>New feedback</strong> from Magic Reel.</p>' +
+    '<p style="color:#555;font-size:13px;">Room: <strong>' + fbEsc(room || '—') + '</strong></p>' +
+    '<div style="background:#fff3ec;border-left:3px solid #f45911;padding:12px 14px;border-radius:4px;white-space:pre-wrap;font-size:14px;">' + fbEsc(note) + '</div></div>';
+  try {
+    const r = await fetch('https://api.resend.com/emails', { method:'POST', headers:{ 'Authorization':'Bearer ' + RESEND_API_KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Magic Reel feedback — ' + (room || 'app'), html }) });
+    if (!r.ok) { console.warn('[feedback] rejected by Resend:', r.status); return { ok:false }; }
+    return { ok:true };
+  } catch(e){ console.warn('[feedback] send failed:', e && e.message); return { ok:false }; }
+}
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const note = String((req.body && req.body.note) || '').trim().slice(0, 4000);
+    const room = String((req.body && req.body.room) || '').trim().slice(0, 80);
+    if (!note) return res.status(400).json({ ok:false, error:'Write a note first.' });
+    const out = await sendFeedbackEmail(note, room);
+    res.json({ ok:true, emailed: !!(out && out.ok) });
+  } catch(e){ console.warn('[feedback] handler error:', e && e.message); res.status(500).json({ ok:false }); }
+});
 
 // --- auth (exempt from the gate) ---
 app.get('/login', (req, res) => {

@@ -158,7 +158,6 @@
     <a href="https://credits.isaiahsmithfilms.com" data-app="credits">Credits</a>
   </nav>
   <div class="fast-menu" id="fastMenu" hidden>
-    <button class="fm-item" id="themeBtn" type="button" aria-label="Toggle theme">&#9728;&#65039; Light mode</button>
     <button class="fm-item fm-disabled" type="button" disabled aria-disabled="true" title="Log out isn&rsquo;t wired up yet">&#8617; Log out</button>
   </div>
 </header>
@@ -220,7 +219,7 @@
   </div>
 </main>
 
-<footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.16.0</footer>
+<footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.17.0</footer>
 
 <script>
   "use strict";
@@ -244,11 +243,7 @@
   function broadcastTheme(){
     for(var i=0;i<FRAMES.length;i++) postThemeTo($(FRAMES[i]));
   }
-  $('themeBtn').addEventListener('click', function(){
-    dark = !dark;
-    applyShellTheme();
-    broadcastTheme();
-  });
+  /* Dark-mode only — Light mode removed; the toggle is gone, dark stays forced. */
   /* each frame re-syncs theme once it loads (covers lazy + late frames) */
   for(var fi=0; fi<FRAMES.length; fi++){
     (function(f){ if(f) f.addEventListener('load', function(){ postThemeTo(f); }); })($(FRAMES[fi]));
@@ -407,6 +402,63 @@
   fetch('/version').then(function(r){ return r.json(); }).then(function(j){
     var f = $('ver'); if(j && j.version && f) f.textContent = 'Isaiah Smith Films \u00b7 Magic Reel ' + String(j.version).split(' \u2014 ')[0];
   }).catch(function(){});
+
+  /* ---------- In-app feedback (emails the team via /api/feedback) \u2014 matches MSM ---------- */
+  (function(){
+    if (document.getElementById("fbBtn")) return;
+    var st = document.createElement("style");
+    st.textContent =
+      "#fbBtn{position:fixed;left:14px;bottom:14px;z-index:9000;display:inline-flex;align-items:center;gap:7px;background:rgba(40,40,46,.62);color:#e8e8ee;border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:8px 13px;font:600 12.5px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 16px rgba(0,0,0,.28);opacity:.72;transition:opacity .15s}" +
+      "#fbBtn:hover{opacity:1}" +
+      "#fbModal{position:fixed;inset:0;z-index:10002;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)}" +
+      "#fbModal.on{display:flex}" +
+      "#fbCard{width:min(420px,calc(100vw - 32px));background:#202024;border:1px solid rgba(255,255,255,.14);border-radius:15px;padding:18px;color:#ececec;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;box-shadow:0 24px 60px rgba(0,0,0,.55)}" +
+      "#fbCard h3{margin:0 0 4px;font-size:16px;font-weight:600}" +
+      "#fbCard p.fb-lead{margin:0 0 12px;font-size:12.5px;color:#a9a9b0;line-height:1.45}" +
+      "#fbText{width:100%;box-sizing:border-box;min-height:120px;resize:vertical;background:#18181b;color:#ececec;border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:11px;font:14px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.5}" +
+      "#fbText:focus{outline:none;border-color:var(--accent)}" +
+      "#fbRow{display:flex;gap:9px;justify-content:flex-end;margin-top:13px;align-items:center}" +
+      "#fbMsg{margin-right:auto;font-size:12px;color:#8fd19e;min-height:15px}" +
+      ".fb-btn{font:600 13px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;border-radius:9px;padding:9px 15px;cursor:pointer;border:1px solid transparent}" +
+      ".fb-cancel{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18);color:#e7e9ee}" +
+      ".fb-cancel:hover{background:rgba(255,255,255,.15)}" +
+      ".fb-send{background:var(--accent);color:#fff}" +
+      ".fb-send:hover{filter:brightness(1.08)}" +
+      ".fb-send:disabled{opacity:.5;cursor:default}";
+    document.head.appendChild(st);
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.id = "fbBtn"; btn.title = "Send feedback to the team";
+    btn.innerHTML = "\ud83d\udcac Feedback";
+    var modal = document.createElement("div");
+    modal.id = "fbModal";
+    modal.innerHTML =
+      '<div id="fbCard" role="dialog" aria-modal="true" aria-label="Send feedback">' +
+        '<h3>\ud83d\udcac Send feedback</h3>' +
+        '<p class="fb-lead">Spot a bug, have an idea, or something feel off? Tell us \u2014 it goes straight to the team.</p>' +
+        '<textarea id="fbText" placeholder="What\u2019s on your mind?"></textarea>' +
+        '<div id="fbRow"><span id="fbMsg"></span>' +
+          '<button type="button" class="fb-btn fb-cancel" id="fbCancel">Cancel</button>' +
+          '<button type="button" class="fb-btn fb-send" id="fbSend">Send</button>' +
+        '</div>' +
+      '</div>';
+    function append(){ if(!document.getElementById("fbBtn")) document.body.appendChild(btn); if(!document.getElementById("fbModal")) document.body.appendChild(modal); }
+    if(document.body) append(); else document.addEventListener("DOMContentLoaded", append);
+    function currentRoom(){ var on = document.querySelector(".tab.active, .tab.on"); return on ? on.textContent.trim() : "Studio"; }
+    function open(){ document.getElementById("fbText").value=""; document.getElementById("fbMsg").textContent=""; var sb=document.getElementById("fbSend"); sb.disabled=false; sb.textContent="Send"; modal.classList.add("on"); setTimeout(function(){ document.getElementById("fbText").focus(); },30); }
+    function close(){ modal.classList.remove("on"); }
+    btn.addEventListener("click", open);
+    modal.addEventListener("click", function(e){ if(e.target===modal) close(); });
+    modal.querySelector("#fbCancel").addEventListener("click", close);
+    modal.querySelector("#fbSend").addEventListener("click", function(){
+      var note=document.getElementById("fbText").value.trim(); var msg=document.getElementById("fbMsg");
+      if(!note){ msg.style.color="#e0a341"; msg.textContent="Write a note first."; return; }
+      var sb=this; sb.disabled=true; sb.textContent="Sending\u2026"; msg.style.color="#8fd19e"; msg.textContent="";
+      fetch("/api/feedback",{ method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ note:note, room:currentRoom() }) })
+        .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+        .then(function(){ msg.style.color="#8fd19e"; msg.textContent="Thanks \u2014 sent!"; setTimeout(close,1100); })
+        .catch(function(){ sb.disabled=false; sb.textContent="Send"; msg.style.color="#e0a341"; msg.textContent="Couldn\u2019t send \u2014 try again."; });
+    });
+  })();
 </script>
 </body>
 </html>

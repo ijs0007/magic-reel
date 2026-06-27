@@ -270,7 +270,6 @@
     <div class="brand"><span class="star">&#10022;</span><span class="wm">Magic Reel</span></div>
     <div class="hdr-actions">
       <button class="theme-toggle" id="helpBtn" aria-label="How this works" title="How this works">?</button>
-      <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">&#9728;&#65039;</button>
     </div>
   </header>
 
@@ -390,11 +389,7 @@
   function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
   /* theme toggle */
-  $('themeBtn').addEventListener('click',function(){
-    var d=document.body.classList.toggle('dark');
-    $('themeBtn').innerHTML=d?'&#9728;&#65039;':'&#127769;';
-    $('themeColorMeta').setAttribute('content',d?'#1a1a1c':'#faf9f5');
-  });
+  /* Dark-mode only — theme toggle removed. */
   (function(){ var hs=$('helpScrim'); if(!hs)return; function openH(){hs.classList.add('show');} function closeH(){hs.classList.remove('show');} var hb=$('helpBtn'); if(hb)hb.addEventListener('click',openH); var hc=$('helpClose'); if(hc)hc.addEventListener('click',closeH); hs.addEventListener('click',function(e){ if(e.target===hs) closeH(); }); })();
 
   /* mock data */
