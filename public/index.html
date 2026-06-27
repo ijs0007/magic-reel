@@ -23,9 +23,16 @@
     --good:#43c48a; --pick:#e8e8e8; --pick-bg:#34343a; --err:#e0796a;
   }
   *{box-sizing:border-box}
+  /* Suite custom scrollbar — IDENTICAL across all four apps (thin, translucent, inset, rounded). */
+  *{ scrollbar-width:thin; scrollbar-color:rgba(150,150,160,.32) transparent; }
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:rgba(150,150,160,.30); border-radius:999px; border:2px solid transparent; background-clip:padding-box; min-height:32px; }
+  ::-webkit-scrollbar-thumb:hover{ background:rgba(170,170,180,.55); }
+  ::-webkit-scrollbar-corner{ background:transparent; }
   html,body{margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:124px}
-  .wrap{max-width:760px;margin:0 auto;padding:0 22px}
+  .wrap{max-width:860px;margin:0 auto;padding:0 22px}
 
   header{display:flex;align-items:center;justify-content:space-between;padding:18px 0 11px;margin-bottom:18px;border-bottom:1px solid var(--border)}
   .brand{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:700;font-family:'Poppins','Segoe UI',-apple-system,sans-serif;letter-spacing:-.01em}
@@ -58,7 +65,7 @@
   .drop.locked{opacity:.5;cursor:not-allowed}
   .drop.locked:hover{border-color:var(--border);background:var(--bg)}
   .drop.locked .browse{color:var(--text-soft)}
-  @keyframes cardflash{0%{box-shadow:0 0 0 0 rgba(124,77,255,0)}25%{box-shadow:0 0 0 3px rgba(124,77,255,.4)}100%{box-shadow:0 0 0 0 rgba(124,77,255,0)}}
+  @keyframes cardflash{0%{box-shadow:0 0 0 0 rgba(244,89,17,0)}25%{box-shadow:0 0 0 3px rgba(244,89,17,.4)}100%{box-shadow:0 0 0 0 rgba(244,89,17,0)}}
   .card.flash{animation:cardflash 1.1s ease}
 
   .filecard{display:none;align-items:center;gap:14px;padding:13px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
@@ -98,7 +105,7 @@
   .deflen{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
   .deflen .dl-label{font-size:13px;color:var(--text)}
   .deflen .dl-label small{display:block;font-size:11.5px;color:var(--text-soft);margin-top:1px}
-  select.msm{font-family:inherit;font-size:14px;padding:8px 30px 8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-webkit-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6a64' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+  select.msm{font-family:inherit;font-size:14px;padding:8px 30px 8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-webkit-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
   select.msm:focus{outline:none;border-color:var(--accent)}
   .deflen select.msm{min-width:120px}
   .deflen-custom{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin:2px 0 6px}
@@ -130,7 +137,7 @@
   .picker-sep{height:3px;border-radius:3px;margin:18px 0 0;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--accent) 42%,transparent),transparent)}
 
   .projsel-wrap{margin-top:14px}
-  select.proj{width:100%;font-family:inherit;font-size:14.5px;padding:11px 36px 11px 13px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-webkit-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%236b6a64' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+  select.proj{width:100%;font-family:inherit;font-size:14.5px;padding:11px 36px 11px 13px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);-webkit-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
   select.proj:focus{outline:none;border-color:var(--accent)}
   #projPick{margin-top:2px}
 
@@ -196,7 +203,7 @@
   .send:disabled{opacity:.4;cursor:default}
   .send svg{width:17px;height:17px}
 
-  footer.ver{text-align:center;color:var(--text-soft);opacity:.7;font-size:11px;padding:22px 0 6px}
+  footer.ver{text-align:center;color:var(--text-soft);font-size:12.5px;letter-spacing:.02em;padding:22px 0 6px}
 
   .scrim{position:fixed;inset:0;z-index:60;background:rgba(20,20,22,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:22px}
   .scrim.show{display:flex}
@@ -357,8 +364,8 @@
     <div id="upPreview" class="up-preview hidden"></div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.10.5 &mdash; &#128202; Clarity pass</footer>
-  <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
+  <footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.15.0 &mdash; &#127899;&#65039; Suite consistency pass</footer>
+  <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Isaiah Smith Films \u00b7 Magic Reel '+j.version;}).catch(function(){});</script>
 </div>
 
 <div class="scrim" id="processScrim"><div class="modal" id="processModal"></div></div>

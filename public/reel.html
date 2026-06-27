@@ -22,9 +22,16 @@
     --good:#43c48a; --pick:#e8e8e8; --pick-bg:#34343a; --err:#e0796a;
   }
   *{box-sizing:border-box}
+  /* Suite custom scrollbar — IDENTICAL across all four apps (thin, translucent, inset, rounded). */
+  *{ scrollbar-width:thin; scrollbar-color:rgba(150,150,160,.32) transparent; }
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:rgba(150,150,160,.30); border-radius:999px; border:2px solid transparent; background-clip:padding-box; min-height:32px; }
+  ::-webkit-scrollbar-thumb:hover{ background:rgba(170,170,180,.55); }
+  ::-webkit-scrollbar-corner{ background:transparent; }
   html,body{margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:120px}
-  .wrap{max-width:760px;margin:0 auto;padding:0 22px}
+  .wrap{max-width:860px;margin:0 auto;padding:0 22px}
 
   header{display:flex;align-items:center;justify-content:space-between;padding:18px 0 11px;margin-bottom:16px;border-bottom:1px solid var(--border)}
   .brand{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:700;font-family:'Poppins','Segoe UI',-apple-system,sans-serif;letter-spacing:-.01em}
@@ -129,7 +136,7 @@
   .dl:disabled{opacity:.4;cursor:default}
   .dl svg{width:18px;height:18px}
 
-  footer.ver{text-align:center;color:var(--text-soft);opacity:.7;font-size:11px;padding:22px 0 6px}
+  footer.ver{text-align:center;color:var(--text-soft);font-size:12.5px;letter-spacing:.02em;padding:22px 0 6px}
 
   .blockpad{text-align:center;padding:42px 26px}
   .blockico{width:56px;height:56px;border-radius:50%;background:var(--pick-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
@@ -338,7 +345,7 @@
     </div>
   </div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.10.0 &mdash; &#127916; Studio shell</footer>
+  <footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.15.0 &mdash; &#127899;&#65039; Suite consistency pass</footer>
 </div>
 
 <div class="bar">
@@ -563,7 +570,7 @@
     }).catch(function(){ loadPoll=setTimeout(loadByToken,4000); });
   }
   showMsg('Loading your footage\u2026',true);
-  fetch('/version').then(function(r){return r.json();}).then(function(j){ if(j&&j.version&&$('ver')) $('ver').textContent='Magic Reel \u00b7 '+j.version; }).catch(function(){});
+  fetch('/version').then(function(r){return r.json();}).then(function(j){ if(j&&j.version&&$('ver')) $('ver').textContent='Isaiah Smith Films \u00b7 Magic Reel '+j.version; }).catch(function(){});
   if(TOKEN){ loadByToken(); }
   else {
     fetch('/api/sends/latest').then(function(r){

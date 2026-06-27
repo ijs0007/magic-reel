@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.14.0 — ✨ Identical full-width header, no badge, line menu';
+const APP_VERSION = 'v0.15.0 — 🎛️ Suite consistency pass: scrollbar, tab sizing, button states';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

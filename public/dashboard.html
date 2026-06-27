@@ -21,9 +21,16 @@
     --good:#43c48a; --pick:#e8e8e8; --pick-bg:#34343a; --err:#e0796a;
   }
   *{box-sizing:border-box}
+  /* Suite custom scrollbar — IDENTICAL across all four apps (thin, translucent, inset, rounded). */
+  *{ scrollbar-width:thin; scrollbar-color:rgba(150,150,160,.32) transparent; }
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:rgba(150,150,160,.30); border-radius:999px; border:2px solid transparent; background-clip:padding-box; min-height:32px; }
+  ::-webkit-scrollbar-thumb:hover{ background:rgba(170,170,180,.55); }
+  ::-webkit-scrollbar-corner{ background:transparent; }
   html,body{margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:40px}
-  .wrap{max-width:760px;margin:0 auto;padding:0 22px}
+  .wrap{max-width:860px;margin:0 auto;padding:0 22px}
 
   header{display:flex;align-items:center;justify-content:space-between;padding:18px 0 11px;margin-bottom:18px;border-bottom:1px solid var(--border)}
   .brand{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:700;font-family:'Poppins','Segoe UI',-apple-system,sans-serif;letter-spacing:-.01em}
@@ -143,7 +150,7 @@
   .sheet-close{margin:2px 22px 20px;width:calc(100% - 44px);border:1px solid var(--border);background:transparent;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;color:var(--text);padding:11px;transition:background .15s}
   .sheet-close:hover{background:var(--bg)}
 
-  footer.ver{text-align:center;color:var(--text-soft);opacity:.7;font-size:11px;padding:28px 0 6px}
+  footer.ver{text-align:center;color:var(--text-soft);font-size:12.5px;letter-spacing:.02em;padding:28px 0 6px}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--bg);font-size:13px;font-weight:500;padding:11px 18px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:all .25s;z-index:80;max-width:88vw;text-align:center}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .hidden{display:none !important}
@@ -172,8 +179,8 @@
 
   <div id="detailView" class="hidden"></div>
 
-  <footer class="ver" id="ver">Magic Reel &middot; v0.10.6 &mdash; &#128236; Delivery status</footer>
-  <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Magic Reel \u00b7 '+j.version;}).catch(function(){});</script>
+  <footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.15.0 &mdash; &#127899;&#65039; Suite consistency pass</footer>
+  <script>fetch('/version').then(function(r){return r.json();}).then(function(j){var f=document.getElementById('ver');if(j&&j.version&&f)f.textContent='Isaiah Smith Films \u00b7 Magic Reel '+j.version;}).catch(function(){});</script>
 </div>
 
 <div class="scrim" id="sheetScrim"><div class="sheet" id="recSheet"></div></div>

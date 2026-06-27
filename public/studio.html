@@ -21,6 +21,13 @@
     --good:#43c48a; --pick:#e8e8e8; --pick-bg:#34343a; --err:#e0796a;
   }
   *{box-sizing:border-box}
+  /* Suite custom scrollbar — IDENTICAL across all four apps (thin, translucent, inset, rounded). */
+  *{ scrollbar-width:thin; scrollbar-color:rgba(150,150,160,.32) transparent; }
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:rgba(150,150,160,.30); border-radius:999px; border:2px solid transparent; background-clip:padding-box; min-height:32px; }
+  ::-webkit-scrollbar-thumb:hover{ background:rgba(170,170,180,.55); }
+  ::-webkit-scrollbar-corner{ background:transparent; }
   html,body{margin:0;padding:0;height:100%}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -65,16 +72,24 @@
   /* ---------- Tab bar ---------- */
   nav.tabs{
     flex:0 0 auto;
-    display:flex; gap:5px;
+    display:flex; justify-content:center; gap:6px;
     padding:9px 16px 11px; border-bottom:1px solid var(--border);
     background:var(--bg);
   }
+  /* Content-width tabs (no flex:1 stretch) so they don't balloon on wide desktops —
+     matches MSM's content-sized tab buttons + consistent resize behavior. */
   .tab{
-    flex:1; font-size:14px; font-weight:600; font-family:inherit;
-    padding:9px 6px; border-radius:9px; border:1px solid var(--border);
+    flex:0 0 auto; font-size:14px; font-weight:600; font-family:inherit;
+    padding:9px 18px; border-radius:9px; border:1px solid var(--border);
     background:transparent; color:var(--text-soft); cursor:pointer;
     transition:background .15s, color .15s, border-color .15s;
     white-space:nowrap;
+  }
+  /* On phones the four tabs stretch to fill the narrow width (no overflow).
+     Placed AFTER the base .tab rule so it wins the cascade at ≤600px. */
+  @media (max-width:600px){
+    nav.tabs{justify-content:stretch;gap:5px}
+    nav.tabs .tab{flex:1 1 auto;padding:9px 6px}
   }
   .tab:hover{background:var(--pick-bg);color:var(--text)}
   .tab.active{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
@@ -116,18 +131,18 @@
   #msgBox:disabled{opacity:.5;cursor:not-allowed}
   .tokens{margin:10px 0 18px;font-size:13px;line-height:1.7}
   .tokens code{background:var(--pick-bg);padding:1px 6px;border-radius:5px;font-size:12.5px}
-  .preview-card{border:1px solid var(--border);border-radius:13px;overflow:hidden;margin-bottom:20px}
+  .preview-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px}
   .preview-card-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);padding:9px 15px;border-bottom:1px solid var(--border);background:var(--pick-bg)}
   .msg-preview{padding:15px;font-size:15px;line-height:1.55;white-space:pre-wrap;word-break:break-word;min-height:46px;color:var(--text)}
   .save-row{display:flex;align-items:center;gap:14px}
-  .btn-primary{font-size:15px;font-weight:600;font-family:inherit;padding:11px 26px;border-radius:11px;border:0;background:var(--accent);color:var(--accent-text);cursor:pointer}
-  .btn-primary:hover{filter:brightness(1.06)}
+  .btn-primary{font-size:15px;font-weight:600;font-family:inherit;padding:11px 26px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-text);cursor:pointer}
+  .btn-primary:hover{opacity:.9}
   .btn-primary:disabled{opacity:.55;cursor:default}
   .save-msg{font-size:14px;font-weight:600;color:var(--good)}
   .save-msg.err{color:var(--err)}
 
   /* ---------- Footer ---------- */
-  footer.ver{flex:0 0 auto;text-align:center;font-size:12px;color:var(--text-soft);padding:9px 16px;border-top:1px solid var(--border)}
+  footer.ver{flex:0 0 auto;text-align:center;font-size:12.5px;letter-spacing:.02em;color:var(--text-soft);padding:9px 16px;border-top:1px solid var(--border)}
 </style>
 </head>
 <body class="dark">
@@ -207,7 +222,7 @@
   </div>
 </main>
 
-<footer class="ver" id="ver">Magic Reel &middot; v0.14.0 &mdash; &#10024; Slim header</footer>
+<footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.15.0 &mdash; &#127899;&#65039; Suite consistency pass</footer>
 
 <script>
   "use strict";
@@ -392,7 +407,7 @@
 
   /* footer version (authoritative value from /version) */
   fetch('/version').then(function(r){ return r.json(); }).then(function(j){
-    var f = $('ver'); if(j && j.version && f) f.textContent = 'Magic Reel \u00b7 ' + j.version;
+    var f = $('ver'); if(j && j.version && f) f.textContent = 'Isaiah Smith Films \u00b7 Magic Reel ' + j.version;
   }).catch(function(){});
 </script>
 </body>

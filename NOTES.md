@@ -73,3 +73,46 @@ page with the suite header):
 button/header) ✅; no `.hdr-actions`/`.star` leftovers. ⚠️ Couldn't run a live browser — please
 device-test the header on desktop + iPhone Safari portrait (badge renders, two-row + divider,
 mobile centered, ☰ theme toggle keeps menu open, switcher hops all four apps).
+
+---
+
+## Suite consistency pass (2026-06-27) — Reel. v0.14.0 → v0.15.0.
+
+Aligning Reel to MSM as the gold reference (suite-wide pass; full audit in the repo-root
+`MSM-Studio-Suite/NOTES.md`). Header was already unified in v0.13/v0.14 — untouched here.
+
+**Scrollbar (was entirely absent):** added MSM's custom thin/translucent scrollbar block to all
+four HTML files (`studio.html`, `index.html`, `dashboard.html`, `reel.html`):
+`scrollbar-width:thin; scrollbar-color:rgba(150,150,160,.32) transparent` + the `::-webkit-scrollbar*`
+thumb (rgba(150,150,160,.30), radius 999px, 2px transparent border, padding-box). This is MSM's
+actual scrollbar — used over the task's `#3a3a3d` baseline because MSM already had one (it wins).
+
+**Over-wide top buttons (studio Send/Preview/Dashboard/Settings):** root cause was `.tab{flex:1}`
+inside the uncapped full-height shell — each tab stretched to a full quarter of the window and grew
+without bound on wide desktops. Now `flex:0 0 auto` + `padding:9px 18px`, and `nav.tabs` is
+`justify-content:center` → compact, content-sized, centered, stops growing. Mobile (≤600px) restores
+`flex:1 1 auto` (padding 9px 6px) so the four tabs fill the narrow width without overflow.
+
+**Button/card drift:** studio `.btn-primary` radius 11→10 and hover `filter:brightness(1.06)`→
+`opacity:.9` (now matches `.send/.dl/.modalbtn` + MSM). `.preview-card` radius 13→12.
+
+**Width:** `index/dashboard/reel.html` `.wrap` max-width 760→860 (MSM column).
+
+**Misc:** `index.html` `cardflash` keyframe stale MSM-purple `rgba(124,77,255)`→Reel orange
+`rgba(244,89,17)`; the two custom `<select>` chevrons hardcoded the light text-soft `#6b6a64`→
+theme-neutral `#8a8a8a` (visible in dark too).
+
+**Footer:** all four pages now read "Isaiah Smith Films · Magic Reel v…" (added the brand prefix);
+CSS font-size 11–12→12.5px, dropped `opacity:.7`, added `letter-spacing:.02em`. The runtime
+`/version` fetch was updated to emit the brand prefix too, so the live footer stays consistent.
+`server.js APP_VERSION` → `v0.15.0 — 🎛️ Suite consistency pass: scrollbar, tab sizing, button states`.
+
+**Deliberately left alone:** the standalone `index/dashboard/reel.html` `.star ✦` brand header — the
+public recipient page has no suite chrome by design and the other two render embedded in the studio
+iframe (header hidden). Converting those to the full-width suite band is structural scope, not a
+consistency tweak; their tokens/scrollbar/footer/width were aligned instead.
+
+**Validation:** `node --check server.js` ✅; all inline `<script>` blocks parse ✅; tag-balance
+(div/button/nav/header/footer/select) balanced across all four files ✅. ⚠️ No live browser this
+session — please device-test desktop + iPhone Safari portrait (tab row sizing across widths,
+scrollbars in the Settings panel + dashboard list, footer text). No deploy — yours to push.
