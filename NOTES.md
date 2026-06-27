@@ -51,3 +51,25 @@ Top-right now = **switcher + ☰** only. On phones (≤560px) the switcher + ☰
 - Tag-balance (a/span/nav/div/button/header/footer) all balanced ✅
 - ⚠️ Couldn't run a live browser this session (Chrome extension not connected). **Please device-test:** open ☰ on desktop + iPhone Safari portrait, confirm dark/light still toggles (and re-themes the embedded Send/Preview/Dashboard frames), the switcher still hops to all four apps, and the top-right shows only switcher + ☰. Log out should appear grayed/un-clickable.
 - No deploy — yours to push.
+
+---
+
+## Unified header + logo badge task (2026-06-27) — Reel. v0.12.0 → v0.13.0.
+
+Applied the **same canonical header** as MSM (`public/studio.html`; the studio shell is the only
+page with the suite header):
+- **Part 1:** two-row header — Row 1 badge + `Magic Reel` wordmark (orange gradient kept, unified
+  to 27px); Row 2 the switcher; full-width divider underneath. Flattened the old `.hdr-actions`
+  wrapper into `<header>` (column layout). Hamburger pinned top-right (absolute).
+- **Part 2:** boxed logo badge — `.brand-badge` (30×30, 1.5px orange border, dark fill) with an
+  inline-SVG **clapperboard** in the accent color. Replaces the old `✦`.
+- **Part 3:** mobile (≤560px) centers brand + switcher; hamburger stays top-right.
+- **Part 5:** the ☰ Dark/Light toggle already flipped in place and kept the menu open (the toggle
+  lives inside the menu) — unchanged, already matches the target behavior.
+- Part 4 N/A (Reel is orange, already correct).
+- Version: `server.js` `APP_VERSION` + studio footer → `v0.13.0`.
+
+**Validation:** inline `<script>` + `server.js` `node --check`'d ✅; tags balanced (a/span/nav/div/
+button/header) ✅; no `.hdr-actions`/`.star` leftovers. ⚠️ Couldn't run a live browser — please
+device-test the header on desktop + iPhone Safari portrait (badge renders, two-row + divider,
+mobile centered, ☰ theme toggle keeps menu open, switcher hops all four apps).
