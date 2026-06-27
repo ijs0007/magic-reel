@@ -69,27 +69,25 @@
     .fast-menu{top:50px;right:13px}
   }
 
-  /* ---------- Tab bar ---------- */
+  /* ---------- Tab bar — full-width buttons that fill the page (like Marquee). No line
+     underneath, and the top sits the shared 22px below the header divider (matches the
+     other apps' header-to-content gap). ---------- */
   nav.tabs{
     flex:0 0 auto;
-    display:flex; justify-content:center; gap:6px;
-    padding:9px 16px 11px; border-bottom:1px solid var(--border);
+    display:flex; gap:6px;
+    padding:0 22px 12px;
     background:var(--bg);
   }
-  /* Content-width tabs (no flex:1 stretch) so they don't balloon on wide desktops —
-     matches MSM's content-sized tab buttons + consistent resize behavior. */
   .tab{
-    flex:0 0 auto; font-size:14px; font-weight:600; font-family:inherit;
-    padding:9px 18px; border-radius:9px; border:1px solid var(--border);
+    flex:1 1 0; font-size:14px; font-weight:600; font-family:inherit;
+    padding:9px 14px; border-radius:9px; border:1px solid var(--border);
     background:transparent; color:var(--text-soft); cursor:pointer;
     transition:background .15s, color .15s, border-color .15s;
-    white-space:nowrap;
+    white-space:nowrap; text-align:center;
   }
-  /* On phones the four tabs stretch to fill the narrow width (no overflow).
-     Placed AFTER the base .tab rule so it wins the cascade at ≤600px. */
   @media (max-width:600px){
-    nav.tabs{justify-content:stretch;gap:5px}
-    nav.tabs .tab{flex:1 1 auto;padding:9px 6px}
+    nav.tabs{gap:5px;padding:0 16px 12px}
+    nav.tabs .tab{padding:9px 6px}
   }
   .tab:hover{background:var(--pick-bg);color:var(--text)}
   .tab.active{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
@@ -142,7 +140,7 @@
   .save-msg.err{color:var(--err)}
 
   /* ---------- Footer ---------- */
-  footer.ver{flex:0 0 auto;text-align:center;font-size:12.5px;letter-spacing:.02em;color:var(--text-soft);padding:9px 16px;border-top:1px solid var(--border)}
+  footer.ver{flex:0 0 auto;text-align:center;font-size:12.5px;letter-spacing:.02em;color:var(--text-soft);padding:14px 16px 18px}
 </style>
 </head>
 <body class="dark">
@@ -222,7 +220,7 @@
   </div>
 </main>
 
-<footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.15.0 &mdash; &#127899;&#65039; Suite consistency pass</footer>
+<footer class="ver" id="ver">Isaiah Smith Films &middot; Magic Reel v0.16.0</footer>
 
 <script>
   "use strict";
@@ -407,7 +405,7 @@
 
   /* footer version (authoritative value from /version) */
   fetch('/version').then(function(r){ return r.json(); }).then(function(j){
-    var f = $('ver'); if(j && j.version && f) f.textContent = 'Isaiah Smith Films \u00b7 Magic Reel ' + j.version;
+    var f = $('ver'); if(j && j.version && f) f.textContent = 'Isaiah Smith Films \u00b7 Magic Reel ' + String(j.version).split(' \u2014 ')[0];
   }).catch(function(){});
 </script>
 </body>
