@@ -34,10 +34,37 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.18.1 — 🅖 Title descenders no longer clipped';
+const APP_VERSION = 'v0.19.0 — 🛡 Bulletproofed: self-healing error nets';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ===================== Bulletproofing: async route wrapper =====================
+// express-async-errors style. Wrap every route/middleware handler so a thrown
+// error OR a rejected promise is forwarded to the error-handling middleware
+// instead of crashing the process or hanging the request. Arity is preserved
+// (3-arg handlers vs 4-arg error handlers) so Express still routes correctly.
+// Installed before any route is registered so all of them are covered.
+function wrapHandler(fn) {
+  if (typeof fn !== 'function') return fn;
+  if (fn.length >= 4) {
+    return function (err, req, res, next) {
+      try { return Promise.resolve(fn.call(this, err, req, res, next)).catch(next); }
+      catch (e) { return next(e); }
+    };
+  }
+  return function (req, res, next) {
+    try { return Promise.resolve(fn.call(this, req, res, next)).catch(next); }
+    catch (e) { return next(e); }
+  };
+}
+['get', 'post', 'put', 'delete', 'patch', 'options', 'head', 'all', 'use'].forEach(function (m) {
+  const orig = app[m].bind(app);
+  app[m] = function () {
+    const args = Array.prototype.slice.call(arguments).map(function (a) { return typeof a === 'function' ? wrapHandler(a) : a; });
+    return orig.apply(this, args);
+  };
+});
 
 // Neon Postgres — the SAME database Magic Story Maker uses, so Magic Reel
 // can read your real cast & crew later. Neon requires SSL.
@@ -49,9 +76,29 @@ const pool = process.env.DATABASE_URL
 const MUX_ID = process.env.MUX_TOKEN_ID;
 const MUX_SECRET = process.env.MUX_TOKEN_SECRET;
 function muxConfigured() { return !!(MUX_ID && MUX_SECRET); }
+
+// ===================== Bulletproofing: network resilience =====================
+// Every small outbound JSON call (Mux API, Resend) goes through fetchWithTimeout
+// so a hung upstream can never wedge a request forever. retryIdempotent retries
+// ONCE on a network failure/abort — only ever passed for idempotent GETs (never
+// for email sends or Mux mutations, which must not double-fire). Large binary
+// downloads (downloadToFile) deliberately stay on plain fetch — no short timeout.
+async function fetchWithTimeout(url, opts, timeoutMs, retryIdempotent) {
+  opts = opts || {};
+  if (timeoutMs == null) timeoutMs = 12000;
+  const once = async function () {
+    const ctrl = new AbortController();
+    const t = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, timeoutMs);
+    try { return await fetch(url, Object.assign({}, opts, { signal: ctrl.signal })); }
+    finally { clearTimeout(t); }
+  };
+  try { return await once(); }
+  catch (e) { if (retryIdempotent) return await once(); throw e; }
+}
+
 async function muxFetch(p, opts) {
   opts = opts || {};
-  const res = await fetch('https://api.mux.com' + p, {
+  const res = await fetchWithTimeout('https://api.mux.com' + p, {
     method: opts.method || 'GET',
     headers: {
       'Authorization': 'Basic ' + Buffer.from(MUX_ID + ':' + MUX_SECRET).toString('base64'),
@@ -152,7 +199,7 @@ async function sendReelEmail(to, name, link, filmName, budgetSeconds, sourceFile
   } catch (e) {}
   var html = emailShell(emailEsc(reelFirstName(name)), bodyHtml, link, emailEsc(sourceFile || ''));
   try {
-    var r = await fetch('https://api.resend.com/emails', {
+    var r = await fetchWithTimeout('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: subject, html })
@@ -173,7 +220,7 @@ async function sendReelNudgeEmail(to, name, link, filmName, budgetSeconds) {
   var cap = fmtClock(budgetSeconds);
   var html = emailShell(emailEsc(reelFirstName(name)), 'Still waiting on your selects from ' + phrase + ' — up to <strong>' + cap + '</strong>, whenever you’re ready.', link);
   try {
-    var r = await fetch('https://api.resend.com/emails', {
+    var r = await fetchWithTimeout('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Reminder: your reel selects' + (named ? ' \u2014 ' + film : ''), html })
@@ -196,7 +243,7 @@ async function sendReelExpiringEmail(to, name, link, filmName, budgetSeconds, ex
   var expiry = when ? ('on ' + when) : 'soon';
   var html = emailShell(emailEsc(reelFirstName(name)), 'Your link for ' + phrase + ' expires <strong>' + expiry + '</strong> — grab your cut (up to <strong>' + cap + '</strong>) before then.', link);
   try {
-    var r = await fetch('https://api.resend.com/emails', {
+    var r = await fetchWithTimeout('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Your reel link is expiring' + (named ? ' \u2014 ' + film : ''), html })
@@ -285,7 +332,7 @@ function msmAuthed(req) {
 function gate(req, res, next) {
   if (!DASHBOARD_PASSWORD) return next();
   const p = req.path;
-  if (p === '/login' || p === '/api/login' || p === '/logout' || p === '/health' || p === '/version' || p === '/api/resend-webhook') return next();
+  if (p === '/login' || p === '/api/login' || p === '/logout' || p === '/health' || p === '/version' || p === '/api/resend-webhook' || p === '/api/client-error') return next();
   if (p.indexOf('/r/') === 0 || p.indexOf('/api/r/') === 0 || p.indexOf('/api/cuts/') === 0) return next();
   if (/\.(css|js|mjs|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|otf|map)$/i.test(p)) return next();
   if (isAuthed(req)) return next();
@@ -450,7 +497,7 @@ async function sendFeedbackEmail(note, room){
     '<p style="color:#555;font-size:13px;">Room: <strong>' + fbEsc(room || '—') + '</strong></p>' +
     '<div style="background:#fff3ec;border-left:3px solid #f45911;padding:12px 14px;border-radius:4px;white-space:pre-wrap;font-size:14px;">' + fbEsc(note) + '</div></div>';
   try {
-    const r = await fetch('https://api.resend.com/emails', { method:'POST', headers:{ 'Authorization':'Bearer ' + RESEND_API_KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Magic Reel feedback — ' + (room || 'app'), html }) });
+    const r = await fetchWithTimeout('https://api.resend.com/emails', { method:'POST', headers:{ 'Authorization':'Bearer ' + RESEND_API_KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ from: CALLSHEET_FROM, to: [to], subject: 'Magic Reel feedback — ' + (room || 'app'), html }) }, 8000);
     if (!r.ok) { console.warn('[feedback] rejected by Resend:', r.status); return { ok:false }; }
     return { ok:true };
   } catch(e){ console.warn('[feedback] send failed:', e && e.message); return { ok:false }; }
@@ -463,6 +510,46 @@ app.post('/api/feedback', async (req, res) => {
     const out = await sendFeedbackEmail(note, room);
     res.json({ ok:true, emailed: !!(out && out.ok) });
   } catch(e){ console.warn('[feedback] handler error:', e && e.message); res.status(500).json({ ok:false }); }
+});
+
+// ---------- Error logging + email alerts (the practical "health" layer) ----------
+// Every server-side error is console-logged; a brief alert is emailed to Isaiah via
+// the existing Resend setup, rate-limited so an error storm can't spam the inbox or
+// burn the API quota. Fully best-effort — alerting NEVER throws.
+var _lastAlertAt = 0;
+var ALERT_MIN_GAP_MS = 5 * 60 * 1000; // at most one email alert per 5 minutes
+async function sendErrorAlert(subject, detail) {
+  try {
+    if (!RESEND_API_KEY || !CALLSHEET_FROM) return;
+    var now = Date.now();
+    if (now - _lastAlertAt < ALERT_MIN_GAP_MS) return;
+    _lastAlertAt = now;
+    var ownerEmail = CALLSHEET_FROM.replace(/^.*<([^>]+)>.*$/, '$1');
+    var to = (process.env.FEEDBACK_TO || ownerEmail || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return;
+    var html = '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.5;">' +
+      '<p><strong>Magic Reel — server error</strong></p>' +
+      '<div style="background:#fdecea;border-left:3px solid #d9483b;padding:12px 14px;border-radius:4px;white-space:pre-wrap;font-size:13px;">' +
+      fbEsc(subject) + '\n\n' + fbEsc(String(detail)).slice(0, 2000) + '</div></div>';
+    await fetchWithTimeout('https://api.resend.com/emails', { method:'POST', headers:{ 'Authorization':'Bearer ' + RESEND_API_KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ from: CALLSHEET_FROM, to:[to], subject: '⚠️ Magic Reel — ' + subject, html }) }, 8000);
+  } catch (e) { /* never let alerting throw */ }
+}
+function logError(where, err) {
+  var msg = (err && err.stack) || (err && err.message) || String(err);
+  console.error('[error] ' + where + ': ' + msg);
+  sendErrorAlert(where, msg);
+}
+
+// Capture client-side errors too (best-effort; never fails the page). Public
+// (exempt from the gate) so recipient pages can report as well.
+app.post('/api/client-error', (req, res) => {
+  try {
+    var b = req.body || {};
+    var msg = String(b.message || '').slice(0, 500);
+    var src = String(b.source || '').slice(0, 300);
+    if (msg) console.error('[client-error] ' + msg + (src ? ' @ ' + src : ''));
+  } catch (e) {}
+  res.json({ ok: true });
 });
 
 // --- auth (exempt from the gate) ---
@@ -1376,6 +1463,25 @@ function runRetention() {
   enforceAssetFloor().catch(function (e) { console.warn('[reel-retention] floor:', e.message); });
   notifyExpiringSoon().catch(function (e) { console.warn('[reel-retention] expiring:', e.message); });
 }
+
+// ---------- Global error-handling middleware — friendly, never a raw crash ----------
+// Registered after every route so it catches errors from any of them (sync throws and
+// async rejections both arrive here via the wrapper above). Logs + alerts, then returns
+// a calm message. If the response already started, defer to Express's default handler.
+app.use((err, req, res, next) => {
+  logError('route ' + req.method + ' ' + req.path, err);
+  if (res.headersSent) return next(err);
+  const wantsHtml = req.method === 'GET' && String(req.headers.accept || '').indexOf('text/html') !== -1;
+  if (wantsHtml) {
+    return res.status(500).type('html').send('<!doctype html><meta charset="utf-8"><title>Something went wrong</title><body style="font-family:-apple-system,Segoe UI,sans-serif;padding:40px;color:#333;"><h1>Something went wrong</h1><p>The app hit a snag. Please try again in a moment.</p></body>');
+  }
+  res.status(500).json({ error: 'Something went wrong. Please try again.' });
+});
+
+// ---------- Process-level safety nets — log, alert, and STAY ALIVE ----------
+// A stray uncaught exception or unhandled rejection must never take the engine down.
+process.on('uncaughtException', (err) => { logError('uncaughtException', err); });
+process.on('unhandledRejection', (reason) => { logError('unhandledRejection', reason); });
 
 if (require.main === module) {
   if (pool) ensureSchema()

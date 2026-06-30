@@ -1,5 +1,36 @@
 # Magic Reel — handoff notes
 
+## Suite Bulletproofing, Fixes & Improvements (2026-06-30) — APP_VERSION v0.18.0 → v0.19.0
+
+**Repo hygiene first:** Reel had **no `.gitattributes`** while `core.autocrlf=true` — exactly the setup the
+house rules warn against (line-ending normalization silently strips regex backslashes, e.g. `server.js`'s
+`/^https?:\/\//`). Added the canonical `* -text` `.gitattributes` (own commit) so this commit — and all
+future ones — keep code byte-for-byte. Verified the committed blobs still contain their backslashes.
+
+**Phase 1 fix:** Title descender clip — added `padding-bottom:.16em; margin-bottom:-.16em` to `.brand .wm`
+(and `.brand .bn` on the recipient page) across all four Reel pages. Zero layout shift.
+
+**Phase 2 — Bulletproofing.** All additive; no behavior change on success.
+- **Async route wrapper** installed right after `app = express()` (CommonJS variant): every handler's throw or
+  rejected promise is forwarded to the error middleware. Arity preserved (3-arg vs 4-arg). Pattern validated
+  in isolation.
+- **Global error-handling middleware** (after all routes): logs + alerts, returns a calm HTML page / `{error}`
+  JSON; defers to Express if headers already sent.
+- **Process nets:** `uncaughtException` / `unhandledRejection` log + alert and keep the engine alive (it
+  already had per-job `.catch()` on the retention sweeps — left intact).
+- **Network resilience:** new `fetchWithTimeout()` wraps the **Mux API** (12s) and **all Resend sends** (8s).
+  No retry on those (Mux mutations + email sends must not double-fire). The large **clip download**
+  (`downloadToFile`) deliberately stays on plain `fetch` — a short timeout would break big transfers.
+- **Error logging + email alerts:** `logError()` + `sendErrorAlert()` email Isaiah via the existing Resend
+  setup (`FEEDBACK_TO`, else `CALLSHEET_FROM` address), **rate-limited to one per 5 min**. No-op if unset.
+- **Client-side net:** early inline script on **all four pages** (incl. the public `reel.html` recipient page)
+  catches `window.onerror` + `unhandledrejection`, never blanks the page, best-effort reports to
+  **`POST /api/client-error`** (added to the gate's public allowlist so recipient pages can report too).
+
+**Validation:** `node --check server.js` ✅; all four pages' inline scripts parse + tags balanced ✅; server
+boots and `/health`,`/version`,`/`,`/api/client-error`(public, logged),`/api/dashboard`(503 w/o DB) all
+behave correctly. ⚠️ No live browser / no Mux+DB creds this session — spot-check a real send + recipient cut.
+
 ## Phase 1 (2026-06-26) — switcher + accent. Mechanical pass. Review & push when ready.
 
 ### 1A · Two-way switcher
