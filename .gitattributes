@@ -1,0 +1,17 @@
+# Keep code byte-for-byte. Do NOT use "* text=auto" (it mangles regex backslashes).
+* -text
+*.js   -text
+*.mjs  -text
+*.json -text
+*.html -text
+*.css  -text
+*.md   -text
+*.webp binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.ttf  binary
+*.woff binary
+*.woff2 binary
