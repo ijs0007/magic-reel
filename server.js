@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.19.1 — 🛡 Bulletproofed + suite explainer in How-this-works';
+const APP_VERSION = 'v0.19.2 — 🔁 uncaughtException exits clean for Render restart';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -537,7 +537,7 @@ async function sendErrorAlert(subject, detail) {
 function logError(where, err) {
   var msg = (err && err.stack) || (err && err.message) || String(err);
   console.error('[error] ' + where + ': ' + msg);
-  sendErrorAlert(where, msg);
+  return sendErrorAlert(where, msg); // returns the (rate-limited, never-throwing) alert promise so callers can race it
 }
 
 // Capture client-side errors too (best-effort; never fails the page). Public
@@ -1478,9 +1478,20 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
-// ---------- Process-level safety nets — log, alert, and STAY ALIVE ----------
-// A stray uncaught exception or unhandled rejection must never take the engine down.
-process.on('uncaughtException', (err) => { logError('uncaughtException', err); });
+// ---------- Process-level safety nets ----------
+// unhandledRejection: log + alert, STAY ALIVE (a rejected promise is localized + lower-risk).
+// uncaughtException: after this the process may be in an undefined state, so the safe pattern
+// on Render is log -> alert -> exit(1) and let the platform restart a clean process. The alert
+// email is best-effort and RACED against a 2.5s timer so a hung send can never wedge shutdown
+// (first to finish wins). A paired rejection from the same failure won't double-email —
+// sendErrorAlert is rate-limited to 1 / 5 min and sets its timestamp synchronously.
+process.on('uncaughtException', (err) => {
+  var exited = false;
+  var bail = function () { if (exited) return; exited = true; try { process.exit(1); } catch (e) {} };
+  try { Promise.resolve(logError('uncaughtException', err)).catch(function () {}).finally(bail); }
+  catch (e) { /* fall through to the timer */ }
+  setTimeout(bail, 2500); // not unref'd — the timer must fire to force exit(1) even if the loop would otherwise drain
+});
 process.on('unhandledRejection', (reason) => { logError('unhandledRejection', reason); });
 
 if (require.main === module) {

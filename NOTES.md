@@ -1,5 +1,17 @@
 # Magic Reel — handoff notes
 
+## Polish Round 2 + YouTube Reconnect (2026-06-30)
+
+**Phase A — `uncaughtException` → exit-and-restart (APP_VERSION v0.19.1 → v0.19.2; footers fetch `/version`).**
+After an uncaught exception the engine may be in an undefined state, so on Render the safe pattern is log →
+alert → `process.exit(1)` and let the platform auto-restart clean. The `uncaughtException` handler now logs +
+fires the rate-limited Resend alert (via `logError`, which now **returns** the alert promise — additive), then
+exits, **racing the alert against `setTimeout(bail, 2500)`** (first to settle wins; `exited` flag → exactly one
+exit). The timer is **not `unref`'d** so it deterministically forces exit(1). **`unhandledRejection` unchanged**
+(log + alert, stays alive). Double-alert prevented by the existing 1-email-per-5-min rate-limiter. CommonJS
+syntax (`var`/`function`). Verified: `node --check` ✓; isolated harness proves exit(1) on fast (~35ms) and hung
+(~2.5s) paths; engine boots, `/health` + normal requests succeed, logs clean.
+
 ## Suite Bulletproofing, Fixes & Improvements (2026-06-30) — APP_VERSION v0.18.0 → v0.19.0
 
 **Repo hygiene first:** Reel had **no `.gitattributes`** while `core.autocrlf=true` — exactly the setup the
