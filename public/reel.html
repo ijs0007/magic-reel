@@ -262,6 +262,70 @@
 </style>
 </head>
 <body class="dark">
+<span id="busyLive" class="sr-only" aria-live="polite"></span>
+<div id="topProg" aria-hidden="true"><div id="topProgBar"><div id="topProgFill"></div></div><div id="topProgMsg"></div></div>
+<style>
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  #topProg{position:fixed;top:0;left:0;right:0;z-index:99999;pointer-events:none;opacity:0;transition:opacity .25s;text-align:center}
+  #topProg.on{opacity:1}
+  #topProgBar{height:3px;width:100%;background:rgba(255,255,255,0.10);overflow:hidden}
+  #topProgFill{height:100%;width:0;background:var(--accent);transition:width .3s ease}
+  #topProg.indet #topProgFill{width:38%;animation:topProgSlide 1.1s ease-in-out infinite}
+  @keyframes topProgSlide{0%{margin-left:-38%}100%{margin-left:100%}}
+  #topProgMsg{display:inline-block;margin-top:8px;padding:5px 13px;border-radius:999px;background:rgba(18,18,22,0.94);color:#fff;font-size:12.5px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,0.45)}
+  #topProgMsg:empty{display:none}
+</style>
+<script>
+/* App-wide loading indicator — top progress bar replicated from Marquee, colored by var(--accent). Driven by a
+   ref-counted global fetch wrapper (180ms show-delay; skips telemetry/poll endpoints). Defensive throughout. */
+(function(){
+  try {
+    window.busy = function(label, pct){
+      try {
+        var live = document.getElementById('busyLive'); if (live && label != null) live.textContent = label;
+        var tp = document.getElementById('topProg'); if (!tp) return;
+        tp.classList.add('on');
+        var m = document.getElementById('topProgMsg'); if (m && label != null) m.textContent = label;
+        var f = document.getElementById('topProgFill');
+        if (pct == null || pct === '') { tp.classList.add('indet'); if (f) f.style.width = ''; }
+        else { tp.classList.remove('indet'); if (f) f.style.width = Math.max(0, Math.min(100, Number(pct))) + '%'; }
+      } catch(e){}
+    };
+    window.busyDone = function(){
+      try {
+        var live = document.getElementById('busyLive'); if (live) live.textContent = '';
+        var tp = document.getElementById('topProg'); if (!tp) return;
+        tp.classList.remove('indet');
+        var f = document.getElementById('topProgFill'); if (f) f.style.width = '100%';
+        var m = document.getElementById('topProgMsg');
+        setTimeout(function(){ tp.classList.remove('on'); if (f) f.style.width = '0'; if (m) m.textContent = ''; }, 500);
+      } catch(e){}
+    };
+    if (!window.__barFetchPatched && typeof window.fetch === 'function') {
+      window.__barFetchPatched = true;
+      var orig = window.fetch.bind(window);
+      var inflight = 0, showTimer = null;
+      function skip(u){ u = String(u || ''); return u.indexOf('/api/client-error') !== -1 || u.indexOf('/health') !== -1 || u.indexOf('/version') !== -1 || u.indexOf('/status') !== -1; }
+      function maybeShow(){ if (inflight > 0 && !showTimer) { showTimer = setTimeout(function(){ showTimer = null; if (inflight > 0) { try { window.busy('Working…', null); } catch(e){} } }, 180); } }
+      function stop(){
+        inflight = Math.max(0, inflight - 1);
+        if (inflight === 0) {
+          if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+          var tp = document.getElementById('topProg');
+          if (tp && tp.classList.contains('on')) { try { window.busyDone(); } catch(e){} }
+        }
+      }
+      window.fetch = function(input, init){
+        var url = (typeof input === 'string') ? input : (input && input.url) || '';
+        if (skip(url)) return orig(input, init);
+        inflight++; maybeShow();
+        var p; try { p = orig(input, init); } catch(e){ stop(); throw e; }
+        return Promise.resolve(p).then(function(r){ stop(); return r; }, function(e){ stop(); throw e; });
+      };
+    }
+  } catch(e){}
+})();
+</script>
 
 <div class="wrap">
   <header>

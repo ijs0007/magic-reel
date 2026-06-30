@@ -28,6 +28,22 @@ in `#fastMenu` (opens the panel + closes the menu; `✕` hides it).
   ✓; studio markup serves the heading, hamburger item, Magic-Reel-led paragraph, and Suite block; no leftover
   "How this works" anywhere.
 
+**Phase C — app-wide loading indicators (APP_VERSION v0.19.3 → v0.19.4).** Replicated Marquee's **top progress
+bar** (`#topProg` + exact CSS, colored by `var(--accent)` → orange `#f45911`) with self-contained
+`window.busy(label, pct|null)` / `window.busyDone()`. Injected into **all four pages** (studio, index/Send,
+dashboard, reel/recipient), each driven by its own **ref-counted global `fetch` wrapper** (180ms show-delay;
+skip-list incl. `/status` so the upload's `/api/sends/:id/status` polling doesn't drive it). House-rule safe:
+no `\uXXXX`, no regex backslashes (uses `indexOf`).
+- **Real upload progress:** the Mux UpChunk upload on the Send page drives a **determinate** bar from its real
+  `up.on('progress')` percent (`busy('Uploading… N%', N)`), and `busyDone()` on `success` and on `error` (the
+  bar re-shows from the next progress event if an offline upload resumes). Settings save (`/api/settings`),
+  dashboard load (`/api/dashboard`), and recipient cut all flow through the fetch wrapper.
+- **Decision (noted):** the bar is injected per-page (each page is its own document; index/dashboard are iframed
+  into the studio shell, so each shows the bar at the top of its own content area). The XHR upload isn't a
+  fetch, so it's wired explicitly (the fetch wrapper alone wouldn't catch it).
+- Verified: `node --check` ✓; all four pages' inline scripts parse ✓; the shared isolated harness proves the
+  wrapper logic; booted — `/` and `/studio` serve `#topProg`, `/version` = v0.19.4, logs clean.
+
 ## Suite Bulletproofing, Fixes & Improvements (2026-06-30) — APP_VERSION v0.18.0 → v0.19.0
 
 **Repo hygiene first:** Reel had **no `.gitattributes`** while `core.autocrlf=true` — exactly the setup the
