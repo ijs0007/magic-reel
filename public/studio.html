@@ -234,12 +234,12 @@
   </nav>
   <div class="fast-menu" id="fastMenu" hidden>
     <button class="fm-item" id="reelHelpMenuItem" type="button">&#10067; How It Works</button>
-    <button class="fm-item" id="logsMenuItem" type="button">&#128203; Error log</button>
+    <button class="fm-item" id="logsMenuItem" type="button">&#128203; Activity log</button>
     <button class="fm-item fm-disabled" type="button" disabled aria-disabled="true" title="Log out isn&rsquo;t wired up yet">&#8617; Log out</button>
   </div>
-  <div id="logsPanel" hidden style="position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:9000;width:min(820px,94vw);max-height:82vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,0.45)">
+  <div id="logsPanel" style="display:none;position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:9000;width:min(820px,94vw);max-height:82vh;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,0.45)">
     <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)">
-      <b style="flex:1;color:var(--text);font-size:15px">Error log <span style="font-weight:400;color:var(--text-soft);font-size:12.5px">— recent errors, owner-only, secrets redacted</span></b>
+      <b style="flex:1;color:var(--text);font-size:15px">Activity log <span style="font-weight:400;color:var(--text-soft);font-size:12.5px">— recent activity, owner-only, secrets redacted</span></b>
       <button type="button" id="logsCopyBtn" style="font:inherit;font-size:13px;border:1px solid var(--border);background:transparent;color:var(--text);border-radius:8px;padding:6px 12px;cursor:pointer">Copy all</button>
       <button type="button" id="logsCloseBtn" aria-label="Close" style="background:none;border:none;color:var(--text-soft);font-size:18px;cursor:pointer;line-height:1">&#10005;</button>
     </div>
@@ -261,19 +261,19 @@
       function openLogs(){
         var panel = document.getElementById('logsPanel'), body = document.getElementById('logsBody');
         if (!panel || !body) return;
-        panel.hidden = false; body.textContent = 'Loading…'; lastText = '';
+        panel.style.display = 'flex'; body.textContent = 'Loading…'; lastText = '';
         fetch('/api/logs').then(function(r){ return r.json().then(function(j){ return { ok:r.ok, j:j }; }); }).then(function(res){
           if (!res.ok){ body.textContent = (res.j && res.j.error) ? res.j.error : 'Could not load logs.'; return; }
           var entries = (res.j && res.j.entries) || [];
-          if (!entries.length){ body.textContent = 'No recent errors.'; return; }
+          if (!entries.length){ body.textContent = 'No recent activity.'; return; }
           lastText = entries.map(fmtEntry).join('\n\n');
           body.textContent = lastText;
         }).catch(function(){ body.textContent = 'Could not load logs.'; });
       }
       var item = document.getElementById('logsMenuItem');
-      if (item) item.addEventListener('click', function(){ var m = document.getElementById('fastMenu'); if (m) m.hidden = true; openLogs(); });
+      if (item) item.addEventListener('click', function(){ var m = document.getElementById('fastMenu'); if (m) m.hidden = true; var p = document.getElementById('logsPanel'); if (p && p.style.display === 'flex') { p.style.display = 'none'; return; } openLogs(); });
       var close = document.getElementById('logsCloseBtn');
-      if (close) close.addEventListener('click', function(){ var p = document.getElementById('logsPanel'); if (p) p.hidden = true; });
+      if (close) close.addEventListener('click', function(){ var p = document.getElementById('logsPanel'); if (p) p.style.display = 'none'; });
       var copy = document.getElementById('logsCopyBtn');
       if (copy) copy.addEventListener('click', function(){
         var text = lastText || (document.getElementById('logsBody') ? document.getElementById('logsBody').textContent : '');

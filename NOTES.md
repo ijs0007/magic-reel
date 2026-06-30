@@ -1,5 +1,15 @@
 # Magic Reel — handoff notes
 
+## Phase F log viewer — close (✕) fix + "Activity log" rename (2026-06-30) — APP_VERSION v0.19.5 → v0.19.6
+
+**Fix (`studio.html` — the only page with the viewer):** the log panel's `✕` was dead + the panel auto-opened,
+because `#logsPanel` had both `hidden` AND inline `display:flex` (inline `display` overrides the UA
+`[hidden]{display:none}` rule, so toggling `hidden` did nothing). Switched show/hide to `style.display` (markup
+ships `display:none` = closed by default; open → `flex`, ✕/toggle → `none`); the hamburger item is now a real
+toggle. Renamed **"Error log" → "Activity log"** (heading + `fm-item`) and softened the descriptor + empty-state
+to "recent activity". Copy-all/gate/scrubbing/buffer untouched. Verified: `node --check` ✓, no dup IDs, no stray
+"Error log" on any page, served panel ships `display:none`, `/api/logs` still 403 (strict fail-closed),
+`/version` v0.19.6. (Same one-line mechanism live-verified in MSM via Preview.)
 ## Polish Round 2 + YouTube Reconnect (2026-06-30)
 
 **Phase A — `uncaughtException` → exit-and-restart (APP_VERSION v0.19.1 → v0.19.2; footers fetch `/version`).**
