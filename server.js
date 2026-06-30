@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.19.0 — 🛡 Bulletproofed: self-healing error nets';
+const APP_VERSION = 'v0.19.1 — 🛡 Bulletproofed + suite explainer in How-this-works';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
