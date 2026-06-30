@@ -12,6 +12,22 @@ exit). The timer is **not `unref`'d** so it deterministically forces exit(1). **
 syntax (`var`/`function`). Verified: `node --check` ✓; isolated harness proves exit(1) on fast (~35ms) and hung
 (~2.5s) paths; engine boots, `/health` + normal requests succeed, logs clean.
 
+**Phase B — "How It Works" standardization (APP_VERSION v0.19.2 → v0.19.3).** Reel is multi-page, so the
+canonical "How It Works" lives where the hamburger does — the **owner shell `studio.html`**. Added a
+Credits-style dismissible card (`#reelHelp`, fixed/centered with a `✕` close button + bold "How It Works"
+heading), a **first paragraph leading with "Magic Reel lets you share film footage…"**, a 4-step quick start,
+and the **"Part of the Magic Suite"** block. Wired a new hamburger item **`#reelHelpMenuItem` "❓ How It Works"**
+in `#fastMenu` (opens the panel + closes the menu; `✕` hides it).
+- **Decision (noted):** `index.html` (the Send screen, iframed into the shell) and `reel.html` (the public
+  recipient page) keep their own `?`-button *screen-specific* quick-help modals — those are page how-tos, not the
+  app explainer — but I **renamed their headings + the `?` button title/aria-label "How this works" → "How It
+  Works"** for consistency. The studio panel is the standardized app-level How It Works; the `?` modals are the
+  per-screen guides. Cross-iframe triggering of the index modal from the shell hamburger would need fragile
+  postMessage, so a self-contained shell panel is cleaner.
+- App-title wordmark ("Magic Reel") untouched. Verified: `node --check` ✓; all four pages' inline scripts parse
+  ✓; studio markup serves the heading, hamburger item, Magic-Reel-led paragraph, and Suite block; no leftover
+  "How this works" anywhere.
+
 ## Suite Bulletproofing, Fixes & Improvements (2026-06-30) — APP_VERSION v0.18.0 → v0.19.0
 
 **Repo hygiene first:** Reel had **no `.gitattributes`** while `core.autocrlf=true` — exactly the setup the

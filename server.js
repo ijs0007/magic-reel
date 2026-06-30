@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.19.2 — 🔁 uncaughtException exits clean for Render restart';
+const APP_VERSION = 'v0.19.3 — ❓ How It Works panel in the studio hamburger';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
