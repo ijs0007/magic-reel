@@ -44,6 +44,21 @@ no `\uXXXX`, no regex backslashes (uses `indexOf`).
 - Verified: `node --check` ✓; all four pages' inline scripts parse ✓; the shared isolated harness proves the
   wrapper logic; booted — `/` and `/studio` serve `#topProg`, `/version` = v0.19.4, logs clean.
 
+**Phase F — owner-only error-log viewer (APP_VERSION v0.19.4 → v0.19.5). 🔴 SENSITIVE.** Ported the **reviewed**
+MSM pattern (CommonJS `var`/`function`): capped `RECENT_ERRORS` (200) fed by `logError` + `/api/client-error`
+via `pushError()`; the **hardened `scrubSecrets`** scrubs at write time; all buffer ops `try/catch`-wrapped.
+- **Owner-only, FAIL CLOSED — strictest of the four:** `GET /api/logs` returns **403 unless `isLogsOwner(req)`**,
+  a NEW strict check = `(DASHBOARD_PASSWORD set AND a valid mr_auth cookie) OR msmAuthed(req)`. It deliberately
+  **excludes** `isAuthed`'s "no DASHBOARD_PASSWORD ⇒ open" branch, so even a wide-open dev/misconfigured Reel
+  **denies the logs**. Verified: on a local instance with no password + no SSO, `/` returns **200 (open)** but
+  `/api/logs` returns **403** — the logs gate is independent and fail-closed. `/api/logs` is NOT added to the
+  app gate's exempt list, so the app gate also guards it; the in-handler check is the real gate.
+- **UI:** "📋 Error log" `fm-item` in the **studio shell hamburger** (`studio.html`, the owner-only shell) opens
+  `#logsPanel`, fetches `/api/logs`, renders via **`textContent`**, newest first, **Copy all** = scrubbed text.
+- **Verify:** `node --check` ✓; studio inline scripts parse ✓; booted — `/api/logs` **403 on an open instance
+  (strict fail-closed)**, `/studio` serves the menu item + panel, `/version` v0.19.5. (Same hardened scrubber
+  as MSM, unit-tested there.)
+
 ## Suite Bulletproofing, Fixes & Improvements (2026-06-30) — APP_VERSION v0.18.0 → v0.19.0
 
 **Repo hygiene first:** Reel had **no `.gitattributes`** while `core.autocrlf=true` — exactly the setup the

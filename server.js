@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.19.4 — ⏳ App-wide top loading bar (accent-colored)';
+const APP_VERSION = 'v0.19.5 — 📋 Owner-only error-log viewer (scrubbed)';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -534,9 +534,55 @@ async function sendErrorAlert(subject, detail) {
     await fetchWithTimeout('https://api.resend.com/emails', { method:'POST', headers:{ 'Authorization':'Bearer ' + RESEND_API_KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ from: CALLSHEET_FROM, to:[to], subject: '⚠️ Magic Reel — ' + subject, html }) }, 8000);
   } catch (e) { /* never let alerting throw */ }
 }
+// --- Recent-errors ring buffer (powers the owner-only /api/logs viewer) ---
+// Capped in-memory list of recent server + client errors. Resets on restart (the email-alert layer
+// keeps a durable copy). Secrets are SCRUBBED at write time so the buffer never holds a raw
+// credential. Every read/write is wrapped so logging can never crash the engine.
+var RECENT_ERRORS = [];
+var RECENT_ERRORS_MAX = 200;
+function scrubSecrets(s) {
+  try {
+    s = String(s == null ? '' : s);
+    s = s.replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, 'postgres://[REDACTED]');
+    s = s.replace(/(authorization"?\s*[:=]\s*"?)(?:Bearer\s+|Basic\s+)?[A-Za-z0-9._~+\/-]{8,}=*/gi, '$1[REDACTED]');
+    s = s.replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/g, 'Bearer [REDACTED]');
+    s = s.replace(/GOCSPX-[A-Za-z0-9_-]+/g, '[REDACTED]');
+    s = s.replace(/\bsk[-_][A-Za-z0-9_-]{16,}/g, '[REDACTED]');
+    s = s.replace(/\bre_[A-Za-z0-9_-]{12,}/g, '[REDACTED]');
+    s = s.replace(/\bya29\.[A-Za-z0-9._-]+/g, '[REDACTED]');
+    s = s.replace(/\b1\/\/[A-Za-z0-9._-]+/g, '[REDACTED]');
+    s = s.replace(/\bAKIA[A-Z0-9]{16}\b/g, '[REDACTED]');
+    s = s.replace(/\b([A-Z][A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|_KEY|APIKEY)[A-Z0-9_]*\s*[:=]\s*)\S+/g, '$1[REDACTED]');
+    s = s.replace(/(["']?(?:password|passwd|pwd|secret|client_secret|token|refresh_token|access_token|api[_-]?key|apikey|session_secret|export_key|xi-api-key)["']?\s*[:=]\s*["']?)[^\s"',;}{]+/gi, '$1[REDACTED]');
+    return s;
+  } catch (e) { return '[scrub error]'; }
+}
+function pushError(source, message, ctx) {
+  try {
+    RECENT_ERRORS.push({
+      ts: new Date().toISOString(),
+      source: source === 'client' ? 'client' : 'server',
+      message: scrubSecrets(message).slice(0, 2000),
+      ctx: ctx ? scrubSecrets(String(ctx)).slice(0, 300) : '',
+    });
+    if (RECENT_ERRORS.length > RECENT_ERRORS_MAX) RECENT_ERRORS.splice(0, RECENT_ERRORS.length - RECENT_ERRORS_MAX);
+  } catch (e) { /* logging must never crash the engine */ }
+}
+// Strict owner check for the logs (FAIL CLOSED): a real DASHBOARD_PASSWORD session OR a non-guest SSO.
+// Deliberately EXCLUDES isAuthed's "no DASHBOARD_PASSWORD => open" case, so a misconfigured/dev instance
+// DENIES rather than exposes internal logs.
+function isLogsOwner(req) {
+  try {
+    if (DASHBOARD_PASSWORD && parseCookies(req)[AUTH_COOKIE] === authToken()) return true;
+    if (msmAuthed(req)) return true;
+    return false;
+  } catch (e) { return false; }
+}
+
 function logError(where, err) {
   var msg = (err && err.stack) || (err && err.message) || String(err);
   console.error('[error] ' + where + ': ' + msg);
+  try { pushError('server', msg, where); } catch (e) {}
   return sendErrorAlert(where, msg); // returns the (rate-limited, never-throwing) alert promise so callers can race it
 }
 
@@ -547,9 +593,22 @@ app.post('/api/client-error', (req, res) => {
     var b = req.body || {};
     var msg = String(b.message || '').slice(0, 500);
     var src = String(b.source || '').slice(0, 300);
-    if (msg) console.error('[client-error] ' + msg + (src ? ' @ ' + src : ''));
+    if (msg) { console.error('[client-error] ' + msg + (src ? ' @ ' + src : '')); try { pushError('client', msg, src); } catch (e) {} }
   } catch (e) {}
   res.json({ ok: true });
+});
+
+// Owner-only recent-errors viewer. Server-gated by isLogsOwner (FAIL CLOSED) — anyone else gets 403.
+// NOTE: /api/logs is intentionally NOT in the gate's exempt list, so the app gate guards it too; this
+// in-handler check is the real, strict gate. Returns the already-scrubbed buffer, newest first.
+app.get('/api/logs', (req, res) => {
+  try {
+    if (!isLogsOwner(req)) return res.status(403).json({ error: 'Owner only.' });
+    var entries = RECENT_ERRORS.slice().reverse();
+    res.json({ entries: entries, count: entries.length });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not read logs.' });
+  }
 });
 
 // --- auth (exempt from the gate) ---
