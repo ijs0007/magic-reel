@@ -1,5 +1,12 @@
 # Magic Reel — handoff notes
 
+## Polish Round 3 (2026-07-01)
+
+**Phase 2 — How It Works "?" hamburger icon → accent color (APP_VERSION v0.19.6 → v0.19.7).** The hamburger
+"How It Works" item (studio.html) led with a `&#10067;` entity that renders red/pink. Replaced it with a styled
+`<span style="color:var(--accent);font-weight:700">?</span>` so the "?" uses Reel's orange accent `#f45911`
+(via `var(--accent)`). Icon only; behavior unchanged. Verified: `node --check` ✓; studio inline scripts parse ✓;
+no leftover entity.
 ## Phase F log viewer — close (✕) fix + "Activity log" rename (2026-06-30) — APP_VERSION v0.19.5 → v0.19.6
 
 **Fix (`studio.html` — the only page with the viewer):** the log panel's `✕` was dead + the panel auto-opened,
