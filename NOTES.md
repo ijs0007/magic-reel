@@ -50,6 +50,12 @@ the benign "ResizeObserver loop completed…/limit exceeded" browser quirk never
 shared `/api/client-error` buffer that feeds the log. `indexOf`, no regex (house rule). (6a's
 `querySelectorAll`-on-null bug is MSM-only — confirmed not present here.) Verified: extracted nets `node --check` ✓
 (all 4 pages); filter present ×1 each; `node --check` server.js ✓; 6/6 filter logic tests pass.
+
+**Phase 7 — send grace countdown 12s → 30s (APP_VERSION v0.19.11 → v0.19.12).** The cancellable "Sending in N…"
+window before an upload/send fires is `armSend(file)` in `index.html` (the Send page). Changed only the initial
+value `var n=12` → `var n=30`; the per-second `setInterval` tick, the `<b id="armN">` display, `Cancel`
+(→ `clearFile`), and the fire-at-`n<=0` `startUpload(file)` are all unchanged, so it now counts 30 → 0 and
+otherwise behaves identically. Verified: single-line change; countdown reads from `n`; `node --check` server.js ✓.
 ## Phase F log viewer — close (✕) fix + "Activity log" rename (2026-06-30) — APP_VERSION v0.19.5 → v0.19.6
 
 **Fix (`studio.html` — the only page with the viewer):** the log panel's `✕` was dead + the panel auto-opened,
