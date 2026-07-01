@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.19.12 — ⏱️ Send grace countdown extended 12s → 30s';
+const APP_VERSION = 'v0.19.13 — 🪟 Activity log is a movable, resizable window; brighter message text';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

@@ -1,5 +1,24 @@
 # Magic Reel — handoff notes
 
+## Polish Round 4 (2026-07-01)
+
+**Phase 3 — Activity log is now a movable + resizable window with brighter message text (APP_VERSION v0.19.12 →
+v0.19.13).** In `studio.html`, two changes to the Round-3 glass panel, committed together:
+- **3a movable + resizable:** the header (`#logsHeader`, `cursor:move`) is a drag handle — `mousedown`/`touchstart`
+  → reposition via `left`/`top` (centering transform cleared on first grab), **clamped to the viewport** so it
+  can't be dragged off-screen (mouse **and** touch, for iPhone Safari). Panel gets CSS `resize:both` +
+  `min 300×170` / `max 96vw×90vh` (desktop grip; iOS Safari has no CSS `resize` — drag still works). **Position +
+  size persist** across the suite in a companion cookie `msuite_activity_log_box` (`.isaiahsmithfilms.com`, 30d) —
+  applied on open, saved on drag-end + a debounced ResizeObserver.
+- **3b brighter text:** the log **message** now renders at the header's **solid white** (`var(--text)`); the
+  timestamp/source line stays dim (`var(--text-soft)`). **Decision (noted):** kept the panel's deliberate "never
+  innerHTML" posture — entries are built as **DOM nodes via `textContent`** (bright `.logmsg` + dim `.logmeta`), so
+  still injection-safe (an `<img onerror=…>` entry renders as literal text).
+- **Preserved from Round 3:** ✕ close, hamburger toggle, `msuite_activity_log` open/closed cookie, Copy all, owner-
+  gate, secret-scrubbing.
+Verified in a Preview harness: drag repositions + clamps on-screen; `resize:both` active; message color === title
+color; `node --check` extracted `<script>` ✓ + `node --check` server.js ✓; box-cookie round-trip 4/4; div-balanced.
+
 ## Polish Round 3 (2026-07-01)
 
 **Phase 2 — How It Works "?" hamburger icon → accent color (APP_VERSION v0.19.6 → v0.19.7).** The hamburger
