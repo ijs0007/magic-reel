@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.19.9 — 🪟 Activity log restyled as a floating glass panel';
+const APP_VERSION = 'v0.19.10 — 🍪 Activity log open/closed persists across the suite';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

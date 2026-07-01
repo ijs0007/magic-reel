@@ -30,6 +30,18 @@ Copy-all / ✕ buttons got `flex:0 0 auto;width:auto` (parity with the Marquee w
 secret-scrubbing, ring buffer, Copy-all, ✕/toggle wiring, closed-by-default. **Decision (noted):** mirrored
 Controls' 52% surface opacity exactly; the 16px backdrop-blur keeps the log legible. Verified: no leftover old panel
 style; div-balanced (30/30); glass `#logsPanel` ×1; `node --check` on server.js ✓.
+
+**Phase 5 — Activity log open/closed persists across the suite via a shared cookie (APP_VERSION v0.19.9 →
+v0.19.10).** Added a small parent-domain preference cookie so the Activity log's open/closed state follows the user
+between apps. `setLogPref(v)` writes `msuite_activity_log=<v>; domain=.isaiahsmithfilms.com; path=/; max-age=2592000
+(30d); SameSite=Lax`; `getLogPref()` reads it with **`split(';')` + `trim()` + `indexOf(...)===0`** (no regex per
+house rule; prefix-collision-safe). `openLogs()` now sets the cookie to `1`; the hamburger toggle-closed path and
+the ✕ both set it to `0`. **On load:** `if (getLogPref() === '1') openLogs();` — auto-opens **only** when the cookie
+explicitly says open, so a fresh visitor or an explicitly-closed one stays closed (no auto-open regression).
+Owner-gating still governs the data (`/api/logs` unchanged, fail-closed); the cookie only controls open/closed.
+`localStorage` NOT used (per-subdomain). **Decision (noted):** cookie is not `Secure` — works on the HTTPS subdomains
+via the `.isaiahsmithfilms.com` scope, no-ops on localhost (graceful). Verified: extracted log `<script>` `node
+--check` ✓; 12/12 logic tests pass (incl. fresh→closed, `=0`→closed, `=1`→open, prefix-collision).
 ## Phase F log viewer — close (✕) fix + "Activity log" rename (2026-06-30) — APP_VERSION v0.19.5 → v0.19.6
 
 **Fix (`studio.html` — the only page with the viewer):** the log panel's `✕` was dead + the panel auto-opened,
