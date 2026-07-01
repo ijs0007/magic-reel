@@ -19,6 +19,16 @@ v0.19.13).** In `studio.html`, two changes to the Round-3 glass panel, committed
 Verified in a Preview harness: drag repositions + clamps on-screen; `resize:both` active; message color === title
 color; `node --check` extracted `<script>` ✓ + `node --check` server.js ✓; box-cookie round-trip 4/4; div-balanced.
 
+**Phase 4 — serve `/.well-known/web-app-origin-association` for PWA scope_extensions (APP_VERSION v0.19.13 →
+v0.19.14).** Added a public Express route — registered **BEFORE** `app.use(gate)` so Chrome/Edge fetch it
+unauthenticated — returning the hedged `web-app-origin-association` JSON that authorizes MSM
+(`app.isaiahsmithfilms.com`) to extend its installed-PWA scope over this origin, removing the cross-subdomain
+"out of scope" bar in the installed suite app. See **MSM NOTES** for the full format rationale (the format changed
+across Chrome versions + fails silently, hence the hedged both-shapes body) and Isaiah's by-hand install/verify
+steps. **Decision (noted):** Reel wasn't boot-tested here (no local `node_modules`), but the route sits before the
+gate middleware so it's public by construction; `node --check` server.js ✓. (Credits + Marquee, which share the
+identical route, were booted and returned 200 `application/json` ungated.)
+
 ## Polish Round 3 (2026-07-01)
 
 **Phase 2 — How It Works "?" hamburger icon → accent color (APP_VERSION v0.19.6 → v0.19.7).** The hamburger

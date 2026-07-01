@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.19.13 — 🪟 Activity log is a movable, resizable window; brighter message text';
+const APP_VERSION = 'v0.19.14 — 🔗 PWA scope_extensions: serve web-app-origin-association for the suite';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -477,6 +477,23 @@ app.post('/api/resend-webhook', async function (req, res) {
     }
   } catch (e) {}
   res.status(200).end(); // always 200 so Resend stops retrying
+});
+
+// PWA scope_extensions (Round 4): authorize MSM (app.isaiahsmithfilms.com) to extend its installed-app scope over
+// THIS origin, so switching between the suite's apps inside the installed PWA doesn't show the cross-origin
+// "out of scope" URL bar. Chrome/Edge fetch this file UNAUTHENTICATED, so it is served publicly and registered
+// BEFORE the app gate. The body is a hedged superset of the two shapes current Chromium accepts — the shipped
+// `web_apps`/`web_app_identity` array AND the MDN/WICG id-keyed object — since a wrong format fails silently.
+// See NOTES.md for the format rationale + Isaiah's by-hand install/verify steps.
+const WEB_APP_ORIGIN_ASSOCIATION = {
+  web_apps: [
+    { web_app_identity: 'https://app.isaiahsmithfilms.com/' },
+    { web_app_identity: 'https://app.isaiahsmithfilms.com' }
+  ],
+  'https://app.isaiahsmithfilms.com/': { scope: '/' }
+};
+app.get('/.well-known/web-app-origin-association', function (req, res) {
+  res.set('Content-Type', 'application/json').send(JSON.stringify(WEB_APP_ORIGIN_ASSOCIATION));
 });
 
 app.use(gate);
