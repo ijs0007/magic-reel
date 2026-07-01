@@ -284,29 +284,51 @@
   </script>
 </header>
 
-<div id="reelHelp" hidden style="position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:200;width:min(760px,92vw);max-height:80vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;font-size:13.5px;line-height:1.6;color:var(--text-soft);box-shadow:0 18px 50px rgba(0,0,0,0.45)">
-  <button type="button" id="reelHelpClose" aria-label="Close help" style="position:absolute;top:10px;right:14px;background:none;border:none;color:var(--text-soft);font-size:18px;cursor:pointer;line-height:1">&#10005;</button>
-  <h3 style="margin:0 0 8px;color:var(--text);font-size:16px">How It Works</h3>
-  <p style="margin:0 0 12px">Magic Reel lets you share film footage with cast &amp; crew so each person pulls their own selects into a clean reel &mdash; no big files emailed around.</p>
-  <ol style="margin:0 0 12px;padding-left:20px">
-    <li style="margin-bottom:5px"><b>Add who gets it.</b> On the <b>Send</b> tab, enter each person&rsquo;s name and email and set how much footage each can pull.</li>
-    <li style="margin-bottom:5px"><b>Drop your film.</b> Drag the video onto the drop zone &mdash; Magic Reel uploads it and prepares a private preview.</li>
-    <li style="margin-bottom:5px"><b>It emails everyone.</b> Each person gets their own private link; you can close the tab once it says it&rsquo;s done.</li>
-    <li><b>They pull selects.</b> Recipients scrub the footage, mark the parts they want, and download a clean cut &mdash; capped at the limit you set.</li>
-  </ol>
-  <div style="padding-top:12px;border-top:1px solid var(--border)"><b style="color:var(--text)">Part of the Magic Suite.</b> Reel is one of four connected apps that share your login and projects: <b>Story Maker</b> (write the script, build cast &amp; crew), <b>Reel</b> (this app &mdash; share footage for selects), <b>Marquee</b> (thumbnails &amp; YouTube upload), and <b>Credits</b> (end-credit roll). Switch between them from the links up top.</div>
+<style>
+  /* How It Works modal — ported from MSM (.prof-overlay): centered, dimmed+blurred backdrop, glass panel, scrollable body. */
+  .prof-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; justify-content: center; align-items: flex-start; padding: 6vh 16px 16px; }
+  .prof-overlay.hidden { display: none; }
+  .prof-overlay-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+  .prof-overlay-panel { position: relative; width: min(640px, 100%); max-height: 88vh; background: color-mix(in srgb, var(--surface) 52%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 11px; box-shadow: 0 14px 38px rgba(0,0,0,0.4); display: flex; flex-direction: column; animation: profPopIn 0.16s ease-out; overflow: hidden; }
+  @keyframes profPopIn { from { opacity: 0; transform: translateY(-8px) scale(.98); } to { opacity: 1; transform: none; } }
+  .prof-overlay-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 15px; flex: 0 0 auto; }
+  .prof-overlay-close { font-size: 18px; background: none; border: none; color: var(--text-soft); cursor: pointer; padding: 4px 10px; border-radius: 8px; }
+  .prof-overlay-close:hover { background: rgba(127,127,127,0.15); color: var(--text); }
+  .prof-overlay-mount { padding: 16px 18px 22px; overflow-y: auto; flex: 1 1 auto; font-size: 13.5px; line-height: 1.6; color: var(--text-soft); }
+</style>
+<div id="reelHelp" class="prof-overlay hidden">
+  <div class="prof-overlay-backdrop" id="reelHelpBackdrop"></div>
+  <div class="prof-overlay-panel">
+    <div class="prof-overlay-head">
+      <span style="flex:1">How It Works</span>
+      <button type="button" class="prof-overlay-close" id="reelHelpClose" aria-label="Close help" title="Close">&#10005;</button>
+    </div>
+    <div class="prof-overlay-mount">
+      <p style="margin:0 0 12px">Magic Reel lets you share film footage with cast &amp; crew so each person pulls their own selects into a clean reel &mdash; no big files emailed around.</p>
+      <ol style="margin:0 0 12px;padding-left:20px">
+        <li style="margin-bottom:5px"><b>Add who gets it.</b> On the <b>Send</b> tab, enter each person&rsquo;s name and email and set how much footage each can pull.</li>
+        <li style="margin-bottom:5px"><b>Drop your film.</b> Drag the video onto the drop zone &mdash; Magic Reel uploads it and prepares a private preview.</li>
+        <li style="margin-bottom:5px"><b>It emails everyone.</b> Each person gets their own private link; you can close the tab once it says it&rsquo;s done.</li>
+        <li><b>They pull selects.</b> Recipients scrub the footage, mark the parts they want, and download a clean cut &mdash; capped at the limit you set.</li>
+      </ol>
+      <div style="padding-top:12px;border-top:1px solid var(--border)"><b style="color:var(--text)">Part of the Magic Suite.</b> Reel is one of four connected apps that share your login and projects: <b>Story Maker</b> (write the script, build cast &amp; crew), <b>Reel</b> (this app &mdash; share footage for selects), <b>Marquee</b> (thumbnails &amp; YouTube upload), and <b>Credits</b> (end-credit roll). Switch between them from the links up top.</div>
+    </div>
+  </div>
 </div>
 <script>
 (function(){ try {
+  // "How It Works" opens as a centered modal (MSM style) from the hamburger item.
   var item = document.getElementById('reelHelpMenuItem');
   var panel = document.getElementById('reelHelp');
   var x = document.getElementById('reelHelpClose');
+  var backdrop = document.getElementById('reelHelpBackdrop');
   var menu = document.getElementById('fastMenu');
-  if (item && panel) item.addEventListener('click', function(){
-    panel.hidden = false;
-    if (menu) menu.hidden = true;            // close the hamburger when opening the panel
-  });
-  if (x && panel) x.addEventListener('click', function(){ panel.hidden = true; });
+  function openHelp(){ if (panel) panel.classList.remove('hidden'); if (menu) menu.hidden = true; }
+  function closeHelp(){ if (panel) panel.classList.add('hidden'); }
+  if (item) item.addEventListener('click', openHelp);
+  if (x) x.addEventListener('click', closeHelp);
+  if (backdrop) backdrop.addEventListener('click', closeHelp);
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && panel && !panel.classList.contains('hidden')) closeHelp(); });
 } catch(e){} })();
 </script>
 

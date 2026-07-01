@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.19.7 — ❓ How It Works ? icon uses accent color';
+const APP_VERSION = 'v0.19.8 — 🪟 How It Works is now a centered modal (MSM style)';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

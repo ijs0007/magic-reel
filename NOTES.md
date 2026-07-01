@@ -7,6 +7,18 @@
 `<span style="color:var(--accent);font-weight:700">?</span>` so the "?" uses Reel's orange accent `#f45911`
 (via `var(--accent)`). Icon only; behavior unchanged. Verified: `node --check` ✓; studio inline scripts parse ✓;
 no leftover entity.
+
+**Phase 3 — How It Works panel → MSM centered modal (APP_VERSION v0.19.7 → v0.19.8).** In `studio.html` the old
+`#reelHelp` was a `position:fixed` top-anchored card with **no backdrop** (nothing dimmed behind it).
+Restructured it into MSM's modal shape: `.prof-overlay > .prof-overlay-backdrop + .prof-overlay-panel(
+.prof-overlay-head[title + ✕] + .prof-overlay-mount[content])`, adding the `.prof-overlay` CSS family + `@keyframes
+profPopIn` (ported from MSM; Reel had no prior copy — verified single definition) in a `<style>` block right above
+the markup. Kept the "How It Works" heading (now in the modal head) and the Magic-Reel-led first paragraph. Open
+still comes from the hamburger item (`#reelHelpMenuItem`) via `classList.remove('hidden')` (closes the menu);
+close = ✕ **and** backdrop-click **and** Escape via `classList.add('hidden')`. **Decision (noted):** title span
+carries inline `flex:1` so the ✕ sits right. Verified: `node --check` on server.js ✓ + on the rewritten inline
+script ✓; div-balanced (30/30); no dup IDs; single `.prof-overlay` definition; live Preview harness (exact ported
+CSS/markup/JS) confirmed centered glass modal + dimmed/blurred backdrop + backdrop-click close.
 ## Phase F log viewer — close (✕) fix + "Activity log" rename (2026-06-30) — APP_VERSION v0.19.5 → v0.19.6
 
 **Fix (`studio.html` — the only page with the viewer):** the log panel's `✕` was dead + the panel auto-opened,
