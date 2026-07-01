@@ -34,7 +34,7 @@ const { Pool } = require('pg');
 let ffmpegPath = null;
 try { ffmpegPath = require('ffmpeg-static'); } catch (e) { /* installed in production via npm install */ }
 
-const APP_VERSION = 'v0.19.8 — 🪟 How It Works is now a centered modal (MSM style)';
+const APP_VERSION = 'v0.19.9 — 🪟 Activity log restyled as a floating glass panel';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

@@ -19,6 +19,17 @@ close = ✕ **and** backdrop-click **and** Escape via `classList.add('hidden')`.
 carries inline `flex:1` so the ✕ sits right. Verified: `node --check` on server.js ✓ + on the rewritten inline
 script ✓; div-balanced (30/30); no dup IDs; single `.prof-overlay` definition; live Preview harness (exact ported
 CSS/markup/JS) confirmed centered glass modal + dimmed/blurred backdrop + backdrop-click close.
+
+**Phase 4 — Activity log restyled to Credits' floating "Controls" glass panel (APP_VERSION v0.19.8 → v0.19.9).** In
+`studio.html` the owner-only Activity log `#logsPanel` keeps its centered floating position but swaps its opaque
+`var(--surface)` fill for the **glass treatment** Credits uses on its pop-out **Controls** panel: `background:
+color-mix(in srgb, var(--surface) 52%, transparent)` + `backdrop-filter: blur(16px)`, `border: 1px solid
+color-mix(in srgb, var(--border) 70%, transparent)`, `border-radius: 12px`, softer `box-shadow: 0 14px 38px
+rgba(0,0,0,.4)`, plus `overflow:hidden`. Header hardened for narrow widths: title `<b>` got `min-width:0` and the
+Copy-all / ✕ buttons got `flex:0 0 auto;width:auto` (parity with the Marquee wrap fix). **Untouched:** owner-gate,
+secret-scrubbing, ring buffer, Copy-all, ✕/toggle wiring, closed-by-default. **Decision (noted):** mirrored
+Controls' 52% surface opacity exactly; the 16px backdrop-blur keeps the log legible. Verified: no leftover old panel
+style; div-balanced (30/30); glass `#logsPanel` ×1; `node --check` on server.js ✓.
 ## Phase F log viewer — close (✕) fix + "Activity log" rename (2026-06-30) — APP_VERSION v0.19.5 → v0.19.6
 
 **Fix (`studio.html` — the only page with the viewer):** the log panel's `✕` was dead + the panel auto-opened,
